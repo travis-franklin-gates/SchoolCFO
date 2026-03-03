@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -25,12 +25,14 @@ export async function proxy(request: NextRequest) {
     }
   )
 
+  // Refresh the session token on every request.
+  // IMPORTANT: use getUser() not getSession() — getSession() reads from the cookie
+  // without re-validating with the Supabase server, which is unsafe in middleware.
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
-
   const isAuthPage = pathname === '/login' || pathname === '/signup'
 
   if (!user && !isAuthPage) {
@@ -45,6 +47,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Must return supabaseResponse (not a new NextResponse.next()) so that
+  // the updated session cookies are forwarded to the browser.
   return supabaseResponse
 }
 

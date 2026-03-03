@@ -6,7 +6,8 @@
       "Bash(test:*)",
       "Bash(ls:*)",
       "Bash(npm run:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(rm:*)"
     ]
   }
 }

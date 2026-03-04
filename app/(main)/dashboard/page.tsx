@@ -86,7 +86,17 @@ export default function DashboardPage() {
   const warningAlerts = alerts.filter((a) => a.severity === 'warning')
   const latestPacket = [...boardPackets].sort((a, b) => (a.id > b.id ? -1 : 1))[0]
 
-  const spendData = financialData.monthlySpend
+  // When monthlySpend is empty (real import), synthesize from the active snapshot
+  let spendData = financialData.monthlySpend
+  if (spendData.length === 0 && activeSnap) {
+    const activeIdx = fiscalIndexFromKey(activeMonth)
+    const months = getFiscalMonths().filter((fm) => fm.fiscalIndex <= activeIdx)
+    const totalActuals = activeSnap.financialSummary.totalActuals
+    const totalBudget = activeSnap.financialSummary.totalBudget
+    const monthlyBudget = Math.round(totalBudget / 12)
+    const monthlyAmount = months.length > 0 ? Math.round(totalActuals / months.length) : 0
+    spendData = months.map((fm) => ({ month: fm.shortLabel, amount: monthlyAmount, budget: monthlyBudget }))
+  }
 
   // Health score
   const hasAction = financialData.categories.some((c) => c.alertStatus === 'action')

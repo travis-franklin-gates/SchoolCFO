@@ -75,7 +75,7 @@ function deriveAlertStatus(budget: number, ytdActuals: number, expectedPct: numb
   if (budget === 0 || expectedPct === 0) return 'ok' as const
   const burnRate = (ytdActuals / budget) * 100
   // Relative % over expected pace (consistent with store and budget-analysis display)
-  const variance = (burnRate - expectedPct) / expectedPct * 100
+  const variance = burnRate - expectedPct
   if (variance > 20) return 'action' as const
   if (variance > 10) return 'concern' as const
   if (variance > 5) return 'watch' as const

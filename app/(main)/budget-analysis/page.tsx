@@ -9,10 +9,6 @@ function fmt(n: number) {
   return n >= 0 ? `$${n.toLocaleString()}` : `-$${Math.abs(n).toLocaleString()}`
 }
 
-function fmtPct(n: number) {
-  return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
-}
-
 const statusConfig: Record<BudgetAlertStatus, { label: string; badge: string; row: string }> = {
   ok: {
     label: 'On Track',
@@ -70,17 +66,32 @@ export default function BudgetAnalysisPage() {
   const PACE = paceFromKey(activeMonth)
   const MONTHS_ELAPSED = fiscalIndexFromKey(activeMonth)
   const TOTAL_MONTHS = 12
+  const PACE_PCT = Math.round(PACE * 100)
+
+  // Thresholds (pp over expected pace): +5 → watch, +10 → concern, +20 → action
+  const burnColor = (burnRate: number) => {
+    const pp = burnRate - PACE_PCT
+    if (pp > 20) return { bar: 'bg-red-500',    text: 'text-red-600 font-semibold' }
+    if (pp > 10) return { bar: 'bg-orange-400',  text: 'text-orange-600 font-semibold' }
+    if (pp > 5)  return { bar: 'bg-yellow-400',  text: 'text-yellow-700' }
+    return           { bar: 'bg-green-500',    text: 'text-green-700' }
+  }
 
   const categories = financialData.categories.map((cat) => {
     const expectedToDate = cat.budget * PACE
     const varianceDollar = cat.ytdActuals - expectedToDate
-    const variancePct = expectedToDate > 0 ? (varianceDollar / expectedToDate) * 100 : 0
-    return { ...cat, varianceDollar, variancePct }
+    return { ...cat, varianceDollar }
   })
 
   const toggleRow = (name: string) => {
     setExpanded((prev) => (prev === name ? null : name))
   }
+
+  const totalBudget = categories.reduce((s, c) => s + c.budget, 0)
+  const totalYtd    = categories.reduce((s, c) => s + c.ytdActuals, 0)
+  const totalVarianceDollar = categories.reduce((s, c) => s + c.varianceDollar, 0)
+  const totalBurnRate = totalBudget > 0 ? (totalYtd / totalBudget) * 100 : 0
+  const totalProjYearEnd = categories.reduce((s, c) => s + c.projectedYearEnd, 0)
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -92,7 +103,7 @@ export default function BudgetAnalysisPage() {
         </p>
       </div>
 
-      {/* Legend */}
+      {/* Legend + pace note */}
       <div className="flex items-center gap-4 flex-wrap text-xs text-gray-500">
         <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-800 font-medium">
           On Track
@@ -107,20 +118,19 @@ export default function BudgetAnalysisPage() {
           Action Required
         </span>
         <span className="ml-auto text-gray-400">
-          {MONTHS_ELAPSED} of {TOTAL_MONTHS} months elapsed ({Math.round(PACE * 100)}% through fiscal year)
+          Month {MONTHS_ELAPSED} of {TOTAL_MONTHS} · Expected pace: <strong className="text-gray-600">{PACE_PCT}%</strong> of annual budget
         </span>
       </div>
 
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        {/* Header row */}
-        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 bg-gray-50 border-b border-gray-200 px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+        {/* Column headers */}
+        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 bg-gray-50 border-b border-gray-200 px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
           <div>Category</div>
           <div className="text-right">Budget</div>
           <div className="text-right">YTD Actuals</div>
           <div className="text-right">Variance $</div>
-          <div className="text-right">Variance %</div>
-          <div className="text-right">Burn Rate</div>
+          <div className="text-right">% of Budget</div>
           <div className="text-right">Proj. Year-End</div>
           <div className="text-center">Status</div>
         </div>
@@ -129,11 +139,12 @@ export default function BudgetAnalysisPage() {
           const cfg = statusConfig[cat.alertStatus]
           const isExpanded = expanded === cat.name
           const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok'
+          const bc = burnColor(cat.burnRate)
 
           return (
             <div key={cat.name}>
               <div
-                className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 px-4 py-3.5 border-b border-gray-100 text-sm transition-colors ${cfg.row} ${hasNarrative ? 'cursor-pointer hover:brightness-95' : ''}`}
+                className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 px-4 py-3.5 border-b border-gray-100 text-sm transition-colors ${cfg.row} ${hasNarrative ? 'cursor-pointer hover:brightness-95' : ''}`}
                 onClick={() => hasNarrative && toggleRow(cat.name)}
               >
                 {/* Category */}
@@ -157,64 +168,33 @@ export default function BudgetAnalysisPage() {
                 <div className="text-right text-gray-700">{fmt(cat.ytdActuals)}</div>
 
                 {/* Variance $ */}
-                <div
-                  className={`text-right font-medium ${
-                    cat.varianceDollar > 0 ? 'text-red-600' : 'text-green-600'
-                  }`}
-                >
+                <div className={`text-right font-medium ${cat.varianceDollar > 0 ? 'text-red-600' : 'text-green-600'}`}>
                   {fmt(Math.round(cat.varianceDollar))}
                 </div>
 
-                {/* Variance % — aligned with new 5/10/20 thresholds */}
-                <div
-                  className={`text-right font-medium ${
-                    cat.variancePct > 20
-                      ? 'text-red-600'
-                      : cat.variancePct > 10
-                      ? 'text-orange-600'
-                      : cat.variancePct > 5
-                      ? 'text-yellow-600'
-                      : 'text-green-600'
-                  }`}
-                >
-                  {fmtPct(cat.variancePct)}
-                </div>
-
-                {/* Burn Rate */}
+                {/* % of Budget — burn rate with color-coded bar */}
                 <div className="text-right">
                   <div className="flex items-center justify-end gap-2">
                     <div className="w-16 bg-gray-200 rounded-full h-1.5">
                       <div
-                        className={`h-1.5 rounded-full ${
-                          cat.burnRate > 80
-                            ? 'bg-red-500'
-                            : cat.burnRate > 65
-                            ? 'bg-orange-400'
-                            : 'bg-green-500'
-                        }`}
+                        className={`h-1.5 rounded-full ${bc.bar}`}
                         style={{ width: `${Math.min(cat.burnRate, 100)}%` }}
                       />
                     </div>
-                    <span className="text-gray-600 tabular-nums w-10 text-right">
+                    <span className={`tabular-nums w-10 text-right ${bc.text}`}>
                       {cat.burnRate.toFixed(0)}%
                     </span>
                   </div>
                 </div>
 
                 {/* Projected Year-End */}
-                <div
-                  className={`text-right font-medium ${
-                    cat.projectedYearEnd > cat.budget ? 'text-red-600' : 'text-gray-700'
-                  }`}
-                >
+                <div className={`text-right font-medium ${cat.projectedYearEnd > cat.budget ? 'text-red-600' : 'text-gray-700'}`}>
                   {fmt(cat.projectedYearEnd)}
                 </div>
 
                 {/* Status */}
                 <div className="flex justify-center">
-                  <span
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${cfg.badge}`}
-                  >
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${cfg.badge}`}>
                     {cfg.label}
                   </span>
                 </div>
@@ -239,40 +219,34 @@ export default function BudgetAnalysisPage() {
         })}
 
         {/* Totals Row */}
-        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 px-4 py-3.5 bg-gray-50 border-t-2 border-gray-200 text-sm font-semibold text-gray-800">
+        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 px-4 py-3.5 bg-gray-50 border-t-2 border-gray-200 text-sm font-semibold text-gray-800">
           <div className="pl-5">Total</div>
-          <div className="text-right">
-            {fmt(categories.reduce((s, c) => s + c.budget, 0))}
+          <div className="text-right">{fmt(totalBudget)}</div>
+          <div className="text-right">{fmt(totalYtd)}</div>
+          <div className={`text-right ${totalVarianceDollar > 0 ? 'text-red-600' : 'text-green-600'}`}>
+            {fmt(Math.round(totalVarianceDollar))}
           </div>
           <div className="text-right">
-            {fmt(categories.reduce((s, c) => s + c.ytdActuals, 0))}
+            <div className="flex items-center justify-end gap-2">
+              <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                <div
+                  className={`h-1.5 rounded-full ${burnColor(totalBurnRate).bar}`}
+                  style={{ width: `${Math.min(totalBurnRate, 100)}%` }}
+                />
+              </div>
+              <span className={`tabular-nums w-10 text-right ${burnColor(totalBurnRate).text}`}>
+                {totalBurnRate.toFixed(0)}%
+              </span>
+            </div>
           </div>
-          <div className="text-right text-red-600">
-            {fmt(Math.round(categories.reduce((s, c) => s + c.varianceDollar, 0)))}
-          </div>
-          <div className="text-right text-red-600">
-            {fmtPct(
-              (categories.reduce((s, c) => s + c.varianceDollar, 0) /
-                (categories.reduce((s, c) => s + c.budget, 0) * PACE)) *
-                100
-            )}
-          </div>
-          <div className="text-right">
-            {(
-              (categories.reduce((s, c) => s + c.ytdActuals, 0) /
-                categories.reduce((s, c) => s + c.budget, 0)) *
-              100
-            ).toFixed(0)}
-            %
-          </div>
-          <div className="text-right text-red-600">
-            {fmt(categories.reduce((s, c) => s + c.projectedYearEnd, 0))}
+          <div className={`text-right ${totalProjYearEnd > totalBudget ? 'text-red-600' : 'text-gray-800'}`}>
+            {fmt(totalProjYearEnd)}
           </div>
           <div />
         </div>
       </div>
 
-      {/* Alert count note */}
+      {/* Footer note */}
       <p className="text-xs text-gray-400 flex items-center gap-1.5">
         <AlertTriangle size={12} />
         Click any flagged category to see a plain-English explanation of what&apos;s happening.

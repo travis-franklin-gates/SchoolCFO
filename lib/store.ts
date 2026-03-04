@@ -162,9 +162,9 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     ytdActuals: 2294000,
     burnRate: 74.0,
     projectedYearEnd: 3441000,
-    alertStatus: 'concern',
+    alertStatus: 'watch',
     narrative:
-      "Personnel spending is tracking ahead of pace at 74% of the annual budget (expected 67% through February). At the current rate, personnel costs are projected to reach $3.44M against a $3.1M budget — a potential overage of $341K. Review open position fill timelines and substitute or overtime usage before the end of Q3.",
+      "Personnel is tracking slightly ahead of pace at 74% of the annual budget (expected 67% through February). At the current rate, costs are projected to reach $3.44M against a $3.1M budget. Monitor substitute and overtime usage — if this trend continues into Q3 it will require intervention.",
   },
   {
     name: 'Benefits',
@@ -172,9 +172,8 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     ytdActuals: 440200,
     burnRate: 71.0,
     projectedYearEnd: 660300,
-    alertStatus: 'watch',
-    narrative:
-      "Benefits spending is slightly above pace, tracking with the personnel overspend. If staffing levels stabilize in the second half of the year, benefits costs should follow. Monitor closely given the personnel budget pressure.",
+    alertStatus: 'ok',
+    narrative: undefined,
   },
   {
     name: 'Contracted Services',
@@ -184,7 +183,7 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     projectedYearEnd: 574700,
     alertStatus: 'concern',
     narrative:
-      "Contracted services are running 12% ahead of budget pace. At this trajectory you're projected to exceed this line by approximately $90K. Review active vendor contracts and consider deferring any discretionary service engagements through year-end.",
+      "Contracted services are running 12 percentage points ahead of budget pace. At this trajectory you're projected to exceed this line by approximately $90K. Review active vendor contracts and consider deferring discretionary service engagements through year-end.",
   },
   {
     name: 'Supplies',
@@ -192,9 +191,9 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     ytdActuals: 160380,
     burnRate: 81.0,
     projectedYearEnd: 240570,
-    alertStatus: 'action',
+    alertStatus: 'concern',
     narrative:
-      "Supplies spending requires immediate attention — 81% of the annual budget has been spent with 4 months remaining. At the current rate, supplies will overspend by approximately $43K. Implement a purchase freeze on non-essential supplies for the remainder of the year.",
+      "Supplies spending is running ahead of pace at 81% of the annual budget with 4 months remaining (expected 67%). At the current rate, supplies are projected to overspend by approximately $43K. Review upcoming orders and defer non-essential purchases through year-end.",
   },
   {
     name: 'Facilities',
@@ -246,13 +245,13 @@ const SEED_GRANTS: Grant[] = [
 const SEED_ALERTS: Alert[] = [
   {
     id: '1',
-    message: 'Personnel spending is 7% ahead of pace — projected to exceed the annual budget by $341K at the current trajectory. Review staffing costs and overtime before Q3 ends.',
-    severity: 'critical',
+    message: 'Personnel is 7 percentage points ahead of pace (74% spent vs. 67% expected). Monitor overtime and substitute usage — if the trend continues into Q3 it will need intervention.',
+    severity: 'warning',
   },
   {
     id: '2',
-    message: 'Supplies is at 81% of budget with 4 months remaining. A spending freeze on non-essential purchases is recommended immediately.',
-    severity: 'critical',
+    message: 'Supplies is at 81% of budget with 4 months remaining (expected 67%). Projected to overspend by ~$43K. Defer non-essential purchases through year-end.',
+    severity: 'warning',
   },
   {
     id: '3',
@@ -360,9 +359,15 @@ export const useStore = create<AppState>((set, get) => ({
       .single()
 
     if (school) {
+      // Fix demo data: rename Cedar Grove → Cascade Charter School and persist to DB
+      const schoolName = school.name === 'Cedar Grove' ? 'Cascade Charter School' : school.name
+      if (school.name === 'Cedar Grove') {
+        supabase.from('schools').update({ name: 'Cascade Charter School' }).eq('id', schoolId)
+          .then(({ error }) => { if (error) console.error('[store] fixSchoolName', error) })
+      }
       set({
         schoolProfile: {
-          name: school.name,
+          name: schoolName,
           authorizer: school.authorizer,
           gradeConfig: school.grade_config,
           currentFTES: Number(school.current_ftes),
@@ -719,9 +724,8 @@ export const useStore = create<AppState>((set, get) => ({
 
     const newCategories: BudgetCategory[] = categories.map((cat) => {
       const burnRate = cat.budget > 0 ? (cat.ytdActuals / cat.budget) * 100 : 0
-      // Relative % over expected pace (aligns with budget-analysis display)
-      const expectedPacePct = pace * 100
-      const variance = expectedPacePct > 0 ? (burnRate - expectedPacePct) / expectedPacePct * 100 : 0
+      // Percentage-point difference: burnRate% minus expected pace% (e.g. 74% − 67% = +7pp)
+      const variance = burnRate - pace * 100
       let alertStatus: BudgetAlertStatus
       if (variance > 20) alertStatus = 'action'
       else if (variance > 10) alertStatus = 'concern'

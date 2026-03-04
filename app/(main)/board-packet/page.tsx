@@ -14,17 +14,9 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { useStore, type PacketStatus, type BoardPacketContent } from '@/lib/store'
-import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, labelFromKey } from '@/lib/fiscalYear'
+import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, labelFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-// WA OSPI 2025-26 apportionment schedule (% of annual state aid per calendar month).
-// Ordered here Sep→Aug to match WA State fiscal year. Update when adding multi-state support.
-const OSPI_PCT: Record<string, number> = {
-  '09': 9.0,  '10': 8.0,  '11': 5.0,  '12': 9.0,
-  '01': 8.5,  '02': 9.0,  '03': 9.0,  '04': 9.0,
-  '05': 5.0,  '06': 6.0,  '07': 12.5, '08': 10.0,
-}
 
 const AP_WARRANTS = [
   { range: '2025-0847 – 2025-0921', description: 'Various Operational Vendors', amount: 42350 },
@@ -111,6 +103,7 @@ export default function BoardPacketPage() {
     saveBoardPacket,
     finalizeBoardPacket,
     updateBoardPacketContent,
+    setActiveMonth,
     isLoaded,
   } = useStore()
 
@@ -180,7 +173,7 @@ export default function BoardPacketPage() {
   let runningBalance = cashOnHand
   const cashFlowRows = getFiscalMonths().map((fm) => {
     const mm = fm.key.split('-')[1]
-    const ospiPct = OSPI_PCT[mm] ?? 8.33
+    const ospiPct = OSPI_PCT[mm] ?? DEFAULT_OSPI_PCT
     const revenue = Math.round((totalBudget * ospiPct) / 100)
     const expenses = Math.round(totalBudget / 12)
     const net = revenue - expenses
@@ -890,11 +883,11 @@ export default function BoardPacketPage() {
                 {packet.content && (
                   <button
                     onClick={() => {
-                      // Re-export: switch active month then trigger export
-                      // For now, just note it requires the packet to be loaded
+                      setActiveMonth(packet.monthKey)
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
                     }}
                     className="text-gray-400 hover:text-[#1e3a5f] transition-colors"
-                    title="Re-export PDF"
+                    title="Switch to this month to re-export"
                   >
                     <Download size={15} />
                   </button>

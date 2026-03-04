@@ -333,7 +333,7 @@ export default function SettingsPage() {
 
       {/* ── School Profile ── */}
       <form onSubmit={saveProfile} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-800 mb-5">School Profile</h2>
+        <h2 className="text-base font-semibold text-gray-800 mb-5">School Profile</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
             <label className={labelCls}>School Name</label>
@@ -397,7 +397,7 @@ export default function SettingsPage() {
 
       {/* ── Important Dates ── */}
       <form onSubmit={saveDates} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-800 mb-5">Important Dates</h2>
+        <h2 className="text-base font-semibold text-gray-800 mb-5">Important Dates</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Next Board Meeting</label>
@@ -434,7 +434,7 @@ export default function SettingsPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="font-semibold text-gray-800">Categorical Grants</h2>
+            <h2 className="text-base font-semibold text-gray-800">Categorical Grants</h2>
             <p className="text-xs text-gray-400 mt-0.5">WA state and federal categorical funding</p>
           </div>
           <button
@@ -549,7 +549,7 @@ export default function SettingsPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-1">
           <div>
-            <h2 className="font-semibold text-gray-800">Other Grants &amp; Philanthropic Funding</h2>
+            <h2 className="text-base font-semibold text-gray-800">Other Grants &amp; Philanthropic Funding</h2>
             <p className="text-xs text-gray-400 mt-0.5">Federal discretionary grants, foundations, and multi-year awards</p>
           </div>
           {!showOtherForm && (
@@ -633,7 +633,7 @@ export default function SettingsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium text-gray-800">{grant.name}</p>
-                        <span className={`inline-flex text-xs px-2 py-0.5 rounded-full font-medium ${restrictionBadge}`}>
+                        <span className={`inline-flex text-xs px-3 py-1 rounded-full font-medium ${restrictionBadge}`}>
                           {restrictionLabel}
                         </span>
                       </div>

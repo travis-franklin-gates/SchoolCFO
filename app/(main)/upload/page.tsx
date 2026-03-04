@@ -315,7 +315,13 @@ export default function UploadPage() {
       {error && (
         <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-800">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-          {error}
+          <span className="flex-1">{error}</span>
+          <button
+            onClick={reset}
+            className="shrink-0 text-red-600 underline hover:no-underline text-xs font-medium"
+          >
+            Try again
+          </button>
         </div>
       )}
 
@@ -386,12 +392,12 @@ export default function UploadPage() {
               </p>
             </div>
             {isFullyMapped(columnMappings) ? (
-              <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-3 py-1 rounded-full">
                 <Zap size={11} />
                 All columns recognized
               </span>
             ) : (
-              <span className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
                 <AlertTriangle size={11} />
                 Some columns need mapping
               </span>
@@ -575,7 +581,7 @@ export default function UploadPage() {
                   .map((m) => (
                     <span
                       key={m.columnIndex}
-                      className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-1 rounded-full font-medium"
+                      className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1 rounded-full font-medium"
                     >
                       <span className="text-blue-400">{m.sourceColumn}</span>
                       <ArrowRight size={10} className="text-blue-400" />
@@ -619,7 +625,7 @@ export default function UploadPage() {
                   </div>
                   <div className="flex justify-center">
                     <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cfg.badge}`}
+                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${cfg.badge}`}
                     >
                       {cfg.label}
                     </span>
@@ -757,7 +763,7 @@ export default function UploadPage() {
                       {snap.filename} · {fmtTimestamp(snap.uploadedAt)} · {snap.rowCount.toLocaleString()} records
                     </p>
                   </div>
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full shrink-0">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-3 py-1 rounded-full shrink-0">
                     <CheckCircle size={12} />
                     Imported
                   </span>

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { CLAUDE_MODEL } from '@/lib/constants'
 
 export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -66,7 +67,7 @@ ACTIVE ALERTS:
 ${alertList.map((a) => `- [${String(a.severity ?? 'info').toUpperCase()}] ${String(a.message ?? '')}`).join('\n') || 'None'}`
 
     const response = await client.messages.create({
-      model: 'claude-opus-4-6',
+      model: CLAUDE_MODEL,
       max_tokens: 220,
       system: `You are a virtual CFO delivering a morning briefing to a charter school CEO. Write exactly 3-4 sentences in plain English. No headers, no bullet points, no jargon.
 

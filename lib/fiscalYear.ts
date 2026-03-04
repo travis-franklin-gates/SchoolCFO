@@ -66,3 +66,17 @@ export function fiscalIndexFromKey(key: string): number {
 export function paceFromKey(key: string): number {
   return fiscalIndexFromKey(key) / 12
 }
+
+/**
+ * WA OSPI monthly apportionment as % of annual state aid, keyed by zero-padded
+ * calendar month ("09"–"08"). All 12 months are covered.
+ * Update when adding multi-state support.
+ */
+export const OSPI_PCT: Record<string, number> = {
+  '09': 9.0, '10': 8.0, '11': 5.0, '12': 9.0,
+  '01': 8.5, '02': 9.0, '03': 9.0, '04': 9.0,
+  '05': 5.0, '06': 6.0, '07': 12.5, '08': 10.0,
+}
+
+/** Safety fallback for months not in OSPI_PCT (should never be reached). */
+export const DEFAULT_OSPI_PCT = 8.33

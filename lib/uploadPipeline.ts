@@ -192,20 +192,12 @@ export function extractGrants(
   mappings: ColumnMappingResult[],
   dataRows: string[][]
 ): MappedGrant[] {
-  // Resolve column indices up front and log them so detection failures are immediately visible.
   const nameCol = mappings.find((m) => m.mappedField === 'grantName')?.columnIndex ?? -1
   const amountCol = mappings.find((m) => m.mappedField === 'grantAmount')?.columnIndex ?? -1
   const spentCol = mappings.find((m) => m.mappedField === 'grantSpent')?.columnIndex ?? -1
 
-  console.log(
-    `[uploadPipeline] extractGrants — column indices: name=${nameCol} amount=${amountCol} spent=${spentCol} | total rows: ${dataRows.length}`
-  )
-
   // If no Grant Name column was detected, return early — there is nothing to extract.
-  if (nameCol === -1) {
-    console.log('[uploadPipeline] extractGrants — no grantName column found, returning []')
-    return []
-  }
+  if (nameCol === -1) return []
 
   const grants: MappedGrant[] = []
 
@@ -226,6 +218,5 @@ export function extractGrants(
     grants.push({ name, awardAmount, spent })
   }
 
-  console.log('Grants found:', grants.length, grants.map((g) => g.name))
   return grants
 }

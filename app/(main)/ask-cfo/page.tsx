@@ -111,6 +111,7 @@ export default function AskCFOPage() {
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -165,6 +166,7 @@ export default function AskCFOPage() {
 
   const send = async (message: string) => {
     if (!message.trim() || loading) return
+    setSendError(null)
     const currentFile = attachedFile
     setInput('')
     setAttachedFile(null)
@@ -217,6 +219,7 @@ export default function AskCFOPage() {
           assistantId,
           'Sorry, something went wrong. Make sure your ANTHROPIC_API_KEY environment variable is set.'
         )
+        setSendError(message)
         setLoading(false)
         return
       }
@@ -236,6 +239,7 @@ export default function AskCFOPage() {
         assistantId,
         'Connection error. Please check your network and try again.'
       )
+      setSendError(message)
     }
 
     setLoading(false)
@@ -301,7 +305,7 @@ export default function AskCFOPage() {
             </p>
 
             {/* Suggested questions */}
-            <div className="grid grid-cols-2 gap-2.5 w-full max-w-xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl">
               {SUGGESTED_QUESTIONS.map((q) => (
                 <button
                   key={q}
@@ -414,6 +418,19 @@ export default function AskCFOPage() {
 
       {/* Input bar */}
       <div className="shrink-0 pt-4 border-t border-gray-200 mt-2">
+        {/* Retry bar — shown when the last request failed */}
+        {sendError && !loading && (
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs text-red-500">Request failed.</p>
+            <button
+              onClick={() => send(sendError)}
+              className="text-xs text-[#1e3a5f] font-medium underline hover:no-underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* File chip */}
         {attachedFile && (
           <div className="mb-2 flex items-center gap-2">

@@ -140,7 +140,6 @@ interface AppState {
   addOtherGrant: (grant: OtherGrant) => void
   removeOtherGrant: (id: string) => void
   updateOtherGrant: (id: string, updates: Partial<OtherGrant>) => void
-  generatePacket: () => void
   saveBoardPacket: (monthKey: string, content: BoardPacketContent) => void
   finalizeBoardPacket: (monthKey: string) => void
   updateBoardPacketContent: (monthKey: string, content: Partial<BoardPacketContent>) => void
@@ -368,8 +367,10 @@ export const useStore = create<AppState>((set, get) => ({
       // Fix demo data: rename Cedar Grove → Cascade Charter School and persist to DB
       const schoolName = school.name === 'Cedar Grove' ? 'Cascade Charter School' : school.name
       if (school.name === 'Cedar Grove') {
-        supabase.from('schools').update({ name: 'Cascade Charter School' }).eq('id', schoolId)
-          .then(({ error }) => { if (error) console.error('[store] fixSchoolName', error) })
+        writeThrough(async (sb) => {
+          const { error } = await sb.from('schools').update({ name: 'Cascade Charter School' }).eq('id', schoolId)
+          if (error) console.error('[store] fixSchoolName', error)
+        })
       }
       // Fall back to existing store values (seed) for fields not yet saved by the user
       const existing = get().schoolProfile
@@ -778,7 +779,7 @@ export const useStore = create<AppState>((set, get) => ({
         name: cat.category,
         budget: cat.budget,
         ytdActuals: cat.ytdActuals,
-        burnRate: parseFloat(burnRate.toFixed(1)),
+        burnRate: Math.round(burnRate * 10) / 10,
         projectedYearEnd,
         alertStatus,
         narrative: deriveNarrative(
@@ -951,27 +952,6 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   // ── Board Packets ──
-
-  generatePacket: () => {
-    const { boardPackets } = get()
-    const now = new Date().toISOString().split('T')[0]
-    const month = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    const existing = boardPackets.find((p) => p.month === month)
-    if (existing) {
-      set((state) => ({
-        boardPackets: state.boardPackets.map((p) =>
-          p.id === existing.id ? { ...p, status: 'finalized', generatedAt: now } : p
-        ),
-      }))
-    } else {
-      set((state) => ({
-        boardPackets: [
-          ...state.boardPackets,
-          { id: Date.now().toString(), month, monthKey: '', status: 'draft', generatedAt: now },
-        ],
-      }))
-    }
-  },
 
   saveBoardPacket: (monthKey, content) => {
     const label = labelFromKey(monthKey)

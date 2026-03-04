@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { CLAUDE_MODEL } from '@/lib/constants'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -84,7 +85,7 @@ Return a JSON object with exactly these three keys. No other text, no markdown f
 }`
 
     const message = await client.messages.create({
-      model: 'claude-opus-4-6',
+      model: CLAUDE_MODEL,
       max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     })

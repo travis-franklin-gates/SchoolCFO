@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
-import { getFiscalMonths, fiscalIndexFromKey, paceFromKey } from '@/lib/fiscalYear'
+import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
 
 function fmt(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
@@ -55,13 +55,6 @@ function daysUntil(s: string | undefined | null): number | null {
   return Math.round((d.getTime() - today.getTime()) / 86_400_000)
 }
 
-// WA OSPI payment schedule — % of annual allocation per calendar month.
-// WA State fiscal year — September 1 start. Update when adding multi-state support.
-const OSPI_PCT: Record<string, number> = {
-  '09': 9.0,  '10': 8.0,  '11': 5.0,  '12': 9.0,
-  '01': 8.5,  '02': 9.0,  '03': 9.0,  '04': 9.0,
-  '05': 5.0,  '06': 6.0,  '07': 12.5, '08': 10.0,
-}
 
 const alertStatusConfig = {
   action:  { label: 'Action Required', borderColor: '#ef4444', bg: 'bg-red-50',    badge: 'bg-red-100 text-red-800',    icon: 'text-red-500' },
@@ -132,7 +125,7 @@ export default function DashboardPage() {
     }
 
     fetchBriefing()
-  }, [cacheKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cacheKey]) // eslint-disable-line react-hooks/exhaustive-deps -- cacheKey encodes month+uploadedAt; omitting schoolProfile/financialData/alerts avoids re-fetching on unrelated state changes
 
   // Show spinner only when actively loading with no data to display yet
   if (!isLoaded && Object.keys(monthlySnapshots).length === 0) {
@@ -233,9 +226,9 @@ export default function DashboardPage() {
     const months = getFiscalMonths().filter((fm) => fm.fiscalIndex <= activeIdx)
     const totalActuals = activeSnap.financialSummary.totalActuals
     const totalBudget = activeSnap.financialSummary.totalBudget
-    const sumOspi = months.reduce((s, fm) => s + (OSPI_PCT[fm.key.slice(5, 7)] ?? 8.33), 0)
+    const sumOspi = months.reduce((s, fm) => s + (OSPI_PCT[fm.key.slice(5, 7)] ?? DEFAULT_OSPI_PCT), 0)
     spendData = months.map((fm) => {
-      const pct = OSPI_PCT[fm.key.slice(5, 7)] ?? 8.33
+      const pct = OSPI_PCT[fm.key.slice(5, 7)] ?? DEFAULT_OSPI_PCT
       const amount = sumOspi > 0 ? Math.round(totalActuals * (pct / sumOspi)) : 0
       const budget = Math.round((totalBudget * pct) / 100)
       return { month: fm.shortLabel, amount, budget }
@@ -324,7 +317,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Key Metrics Row ───────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
         {/* Card 1 — Cash Position */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
@@ -519,7 +512,7 @@ export default function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={(v) => `$${v / 1000}K`} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => (v != null ? fmt(Number(v)) : '—')} />
+              <Tooltip formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area type="monotone" dataKey="budget" stroke="#94a3b8" fill="none" strokeDasharray="4 4" name="Budget" />
               <Area type="monotone" dataKey="amount" stroke="#1e3a5f" fill="url(#actualGrad)" strokeWidth={2} name="Actual" />
@@ -540,7 +533,7 @@ export default function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={(v) => `$${v / 1000}K`} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => (v != null ? fmt(Number(v)) : '—')} />
+              <Tooltip formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area type="monotone" dataKey="budget" stroke="#94a3b8" fill="none" strokeDasharray="4 4" name="Budget" />
               <Area type="monotone" dataKey="actual" stroke="#1e3a5f" fill="none" strokeWidth={2} name="Actual" connectNulls={false} />
@@ -556,12 +549,12 @@ export default function DashboardPage() {
           <BarChart
             data={financialData.categories}
             layout="vertical"
-            margin={{ top: 0, right: 16, left: 100, bottom: 0 }}
+            margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
             <XAxis type="number" tickFormatter={(v) => `$${v / 1000}K`} tick={{ fontSize: 11 }} />
             <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={95} />
-            <Tooltip formatter={(v) => (v != null ? fmt(Number(v)) : '—')} />
+            <Tooltip formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Bar dataKey="budget" fill="#e2e8f0" name="Budget" radius={[0, 2, 2, 0]} />
             <Bar dataKey="ytdActuals" fill="#1e3a5f" name="YTD Actuals" radius={[0, 2, 2, 0]} />

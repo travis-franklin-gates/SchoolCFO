@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { fiscalIndexFromKey } from '@/lib/fiscalYear'
+import { CLAUDE_MODEL } from '@/lib/constants'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
     const systemPrompt = buildSystemPrompt(schoolProfile, financialData, grants, alerts, otherGrants, activeMonth)
 
     const stream = client.messages.stream({
-      model: 'claude-opus-4-6',
+      model: CLAUDE_MODEL,
       max_tokens: 2048,
       system: systemPrompt,
       messages,

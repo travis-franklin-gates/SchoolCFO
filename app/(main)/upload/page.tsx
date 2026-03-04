@@ -245,7 +245,7 @@ export default function UploadPage() {
     : STEP_ORDER
   const currentStepIndex = visibleSteps.indexOf(step)
 
-  // History: months with data, in fiscal year order (July first)
+  // History: months with data, in WA State fiscal year order (September first)
   const historyMonths = FISCAL_MONTHS.filter((fm) => monthlySnapshots[fm.key])
 
   return (

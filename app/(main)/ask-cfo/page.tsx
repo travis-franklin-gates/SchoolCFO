@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, FormEvent } from 'react'
-import { MessageCircle, Send, RotateCcw } from 'lucide-react'
+import { useState, useRef, useEffect, FormEvent, DragEvent } from 'react'
+import { MessageCircle, Send, RotateCcw, Paperclip, FileText, FileSpreadsheet, FileImage, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useStore } from '@/lib/store'
@@ -10,38 +10,192 @@ const SUGGESTED_QUESTIONS = [
   'Can I afford to hire a new teacher?',
   'How is our cash position?',
   'Are we at risk of ending the year in deficit?',
-  'How is our Title I spending tracking?',
+  'Analyze this vendor proposal',
   'What are our biggest budget risks right now?',
-  'Should I be concerned about any grants?',
+  'Review this contract for budget impact',
 ]
 
+const ACCEPTED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png']
+const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
+
+const EXT_ICON: Record<string, React.ReactNode> = {
+  pdf: <FileText size={14} />,
+  docx: <FileText size={14} />,
+  xlsx: <FileSpreadsheet size={14} />,
+  jpg: <FileImage size={14} />,
+  jpeg: <FileImage size={14} />,
+  png: <FileImage size={14} />,
+}
+
+const EXT_COLOR: Record<string, string> = {
+  pdf: 'text-red-600 bg-red-50 border-red-200',
+  docx: 'text-blue-600 bg-blue-50 border-blue-200',
+  xlsx: 'text-green-600 bg-green-50 border-green-200',
+  jpg: 'text-purple-600 bg-purple-50 border-purple-200',
+  jpeg: 'text-purple-600 bg-purple-50 border-purple-200',
+  png: 'text-purple-600 bg-purple-50 border-purple-200',
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function toBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1])
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+  | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png'; data: string } }
+
+async function buildApiContent(file: File, userText: string): Promise<string | ContentBlock[]> {
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+
+  if (ext === 'pdf') {
+    const data = await toBase64(file)
+    const blocks: ContentBlock[] = [
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } },
+    ]
+    if (userText.trim()) blocks.push({ type: 'text', text: userText })
+    return blocks
+  }
+
+  if (ext === 'jpg' || ext === 'jpeg' || ext === 'png') {
+    const data = await toBase64(file)
+    const mediaType: 'image/jpeg' | 'image/png' = ext === 'png' ? 'image/png' : 'image/jpeg'
+    const blocks: ContentBlock[] = [
+      { type: 'image', source: { type: 'base64', media_type: mediaType, data } },
+    ]
+    if (userText.trim()) blocks.push({ type: 'text', text: userText })
+    return blocks
+  }
+
+  if (ext === 'docx') {
+    const mammoth = await import('mammoth')
+    const arrayBuffer = await file.arrayBuffer()
+    const result = await mammoth.extractRawText({ arrayBuffer })
+    const extracted = result.value.trim()
+    const prefix = `[Document: ${file.name}]\n\n${extracted}\n\n---\n\n`
+    return prefix + (userText.trim() ? userText : 'Please analyze this document.')
+  }
+
+  if (ext === 'xlsx') {
+    const XLSX = await import('xlsx')
+    const arrayBuffer = await file.arrayBuffer()
+    const wb = XLSX.read(arrayBuffer, { type: 'array' })
+    const csvParts = wb.SheetNames.map((name: string) => {
+      const ws = wb.Sheets[name]
+      return `[Sheet: ${name}]\n${XLSX.utils.sheet_to_csv(ws)}`
+    })
+    const prefix = `[Spreadsheet: ${file.name}]\n\n${csvParts.join('\n\n')}\n\n---\n\n`
+    return prefix + (userText.trim() ? userText : 'Please analyze this spreadsheet.')
+  }
+
+  return userText
+}
+
 export default function AskCFOPage() {
-  const { chatMessages, addChatMessage, updateChatMessage, clearChat, schoolProfile, financialData, grants, alerts, otherGrants } =
+  const { chatMessages, addChatMessage, updateChatMessage, clearChat, schoolProfile, financialData, grants, alerts, otherGrants, activeMonth } =
     useStore()
 
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [attachedFile, setAttachedFile] = useState<File | null>(null)
+  const [fileError, setFileError] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragCounter = useRef(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
+  function handleFileSelect(file: File) {
+    setFileError(null)
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    if (!ACCEPTED_EXTENSIONS.includes(ext)) {
+      setFileError(`Unsupported file type. Accepted: PDF, Word, Excel, JPG, PNG`)
+      return
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      setFileError(`File too large (max 10 MB)`)
+      return
+    }
+    setAttachedFile(file)
+  }
+
+  const onDragEnter = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    dragCounter.current++
+    if (dragCounter.current === 1) setIsDragging(true)
+  }
+
+  const onDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    dragCounter.current--
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0
+      setIsDragging(false)
+    }
+  }
+
+  const onDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+  }
+
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    dragCounter.current = 0
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleFileSelect(file)
+  }
+
   const send = async (message: string) => {
     if (!message.trim() || loading) return
+    const currentFile = attachedFile
     setInput('')
+    setAttachedFile(null)
+    setFileError(null)
     setLoading(true)
 
-    const userMsg = { id: crypto.randomUUID(), role: 'user' as const, content: message }
+    const displayContent = currentFile ? `📎 ${currentFile.name}\n\n${message}`.trim() : message
+
+    const userMsg = { id: crypto.randomUUID(), role: 'user' as const, content: displayContent }
     addChatMessage(userMsg)
 
     const assistantId = crypto.randomUUID()
     addChatMessage({ id: assistantId, role: 'assistant', content: '' })
 
-    const apiMessages = [...chatMessages, userMsg].map((m) => ({
-      role: m.role,
-      content: m.content,
-    }))
+    let apiContent: string | ContentBlock[]
+    if (currentFile) {
+      try {
+        apiContent = await buildApiContent(currentFile, message)
+      } catch {
+        updateChatMessage(assistantId, 'Failed to process the attached file. Please try again.')
+        setLoading(false)
+        return
+      }
+    } else {
+      apiContent = message
+    }
+
+    const apiMessages = [
+      ...chatMessages.map((m) => ({ role: m.role, content: m.content })),
+      { role: 'user', content: apiContent },
+    ]
 
     try {
       const res = await fetch('/api/chat', {
@@ -54,6 +208,7 @@ export default function AskCFOPage() {
           grants,
           alerts,
           otherGrants,
+          activeMonth,
         }),
       })
 
@@ -91,8 +246,26 @@ export default function AskCFOPage() {
     send(input)
   }
 
+  const ext = attachedFile?.name.split('.').pop()?.toLowerCase() ?? ''
+
   return (
-    <div className="max-w-3xl flex flex-col" style={{ height: 'calc(100vh - 64px)' }}>
+    <div
+      className="max-w-3xl flex flex-col relative"
+      style={{ height: 'calc(100vh - 64px)' }}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl bg-blue-50/90 border-2 border-dashed border-blue-400 pointer-events-none">
+          <Paperclip size={32} className="text-blue-400 mb-3" />
+          <p className="text-blue-600 font-semibold text-sm">Drop to attach</p>
+          <p className="text-blue-400 text-xs mt-1">PDF, Word, Excel, JPG, PNG · max 10 MB</p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between mb-6 shrink-0">
         <div>
@@ -124,7 +297,7 @@ export default function AskCFOPage() {
               What would you like to know?
             </h2>
             <p className="text-sm text-gray-400 mb-7 text-center max-w-sm">
-              Ask anything about {schoolProfile.name}&apos;s finances — I&apos;ll answer in plain English.
+              Ask anything about {schoolProfile.name}&apos;s finances — or attach a document to analyze.
             </p>
 
             {/* Suggested questions */}
@@ -241,18 +414,65 @@ export default function AskCFOPage() {
 
       {/* Input bar */}
       <div className="shrink-0 pt-4 border-t border-gray-200 mt-2">
+        {/* File chip */}
+        {attachedFile && (
+          <div className="mb-2 flex items-center gap-2">
+            <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium ${EXT_COLOR[ext] ?? 'text-gray-600 bg-gray-50 border-gray-200'}`}>
+              {EXT_ICON[ext] ?? <FileText size={14} />}
+              <span className="max-w-[180px] truncate">{attachedFile.name}</span>
+              <span className="opacity-60">· {formatBytes(attachedFile.size)}</span>
+              <button
+                onClick={() => { setAttachedFile(null); setFileError(null) }}
+                className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
+                aria-label="Remove attachment"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* File error */}
+        {fileError && (
+          <p className="mb-2 text-xs text-red-500">{fileError}</p>
+        )}
+
         <form onSubmit={onSubmit} className="flex gap-2">
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleFileSelect(file)
+              e.target.value = ''
+            }}
+          />
+
+          {/* Paperclip button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading}
+            className="px-3 py-2.5 border border-gray-300 rounded-lg text-gray-400 hover:text-[#1e3a5f] hover:border-[#1e3a5f] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Attach a file (PDF, Word, Excel, JPG, PNG)"
+          >
+            <Paperclip size={16} />
+          </button>
+
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question about your finances…"
+            placeholder={attachedFile ? 'Add a message about this file…' : 'Ask a question about your finances…'}
             disabled={loading}
             className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f] disabled:opacity-50 bg-white"
           />
           <button
             type="submit"
-            disabled={!input.trim() || loading}
+            disabled={(!input.trim() && !attachedFile) || loading}
             className="px-4 py-2.5 bg-[#1e3a5f] text-white rounded-lg hover:bg-[#162d4a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <Send size={16} />

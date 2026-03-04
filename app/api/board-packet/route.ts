@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 
-const client = new Anthropic()
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 // WA OSPI 2025-26 actual apportionment schedule
 const OSPI_SCHEDULE = `WA OSPI 2025-26 monthly apportionment (% of annual state aid):
@@ -9,6 +9,14 @@ July 12.5% | August 10% | September 9% | October 8% | November 5% (LOW PAYMENT M
 December 9% | January 8.5% | February 9% | March 9% | April 9% | May 5% (LOW PAYMENT MONTH) | June 6%`
 
 export async function POST(req: NextRequest) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error('[board-packet] ANTHROPIC_API_KEY is not set')
+    return NextResponse.json(
+      { error: 'ANTHROPIC_API_KEY environment variable is not configured on this server.' },
+      { status: 500 }
+    )
+  }
+
   try {
     const {
       schoolName,

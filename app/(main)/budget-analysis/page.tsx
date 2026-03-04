@@ -36,7 +36,7 @@ export default function BudgetAnalysisPage() {
   const { financialData, isLoaded, monthlySnapshots, activeMonth } = useStore()
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  if (!isLoaded) {
+  if (!isLoaded && Object.keys(monthlySnapshots).length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-4 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
@@ -68,6 +68,15 @@ export default function BudgetAnalysisPage() {
   const TOTAL_MONTHS = 12
   const PACE_PCT = Math.round(PACE * 100)
 
+  // Re-derive alertStatus from burn rate so stale Supabase values don't produce wrong badges.
+  const deriveAlertStatus = (burnRate: number): BudgetAlertStatus => {
+    const pp = burnRate - PACE_PCT
+    if (pp > 20) return 'action'
+    if (pp > 10) return 'concern'
+    if (pp > 5 || pp < -20) return 'watch'
+    return 'ok'
+  }
+
   // Thresholds (pp over expected pace): +5 → watch, +10 → concern, +20 → action
   const burnColor = (burnRate: number) => {
     const pp = burnRate - PACE_PCT
@@ -80,7 +89,9 @@ export default function BudgetAnalysisPage() {
   const categories = financialData.categories.map((cat) => {
     const expectedToDate = cat.budget * PACE
     const varianceDollar = cat.ytdActuals - expectedToDate
-    return { ...cat, varianceDollar }
+    // Override stored alertStatus with re-derived value based on current fiscal pace
+    const alertStatus = deriveAlertStatus(cat.burnRate)
+    return { ...cat, alertStatus, varianceDollar }
   })
 
   const toggleRow = (name: string) => {

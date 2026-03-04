@@ -155,62 +155,66 @@ interface AppState {
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
 
+// Seed data reflects WA State fiscal year (Sep 1 – Aug 31).
+// Active month: March 2026 = fiscal month 7 of 12, expected pace 58%.
 const SEED_CATEGORIES: BudgetCategory[] = [
   {
     name: 'Personnel',
     budget: 3100000,
     ytdActuals: 2294000,
     burnRate: 74.0,
-    projectedYearEnd: 3441000,
-    alertStatus: 'watch',
+    projectedYearEnd: 3933000,  // ytdActuals / (7/12)
+    alertStatus: 'concern',     // +16pp over 58% pace
     narrative:
-      "Personnel is tracking slightly ahead of pace at 74% of the annual budget (expected 67% through February). At the current rate, costs are projected to reach $3.44M against a $3.1M budget. Monitor substitute and overtime usage — if this trend continues into Q3 it will require intervention.",
+      "Personnel is tracking 16 percentage points ahead of pace at 74% of the annual budget (expected 58% through March). At the current rate, costs are projected to reach $3.93M against a $3.1M budget. Investigate substitute and overtime usage before Q4 staffing decisions are finalized.",
   },
   {
     name: 'Benefits',
     budget: 620000,
     ytdActuals: 440200,
     burnRate: 71.0,
-    projectedYearEnd: 660300,
-    alertStatus: 'ok',
-    narrative: undefined,
+    projectedYearEnd: 754600,   // ytdActuals / (7/12)
+    alertStatus: 'concern',     // +13pp over 58% pace
+    narrative:
+      "Benefits costs are running 13 percentage points ahead of pace at 71% of budget (expected 58% through March). At this trajectory, benefits are projected to reach $755K against a $620K budget. Verify whether benefit elections or employer contributions changed mid-year and confirm the full-year impact.",
   },
   {
     name: 'Contracted Services',
     budget: 485000,
     ytdActuals: 383150,
     burnRate: 79.0,
-    projectedYearEnd: 574700,
-    alertStatus: 'concern',
+    projectedYearEnd: 656800,   // ytdActuals / (7/12)
+    alertStatus: 'action',      // +21pp over 58% pace
     narrative:
-      "Contracted services are running 12 percentage points ahead of budget pace. At this trajectory you're projected to exceed this line by approximately $90K. Review active vendor contracts and consider deferring discretionary service engagements through year-end.",
+      "Contracted services require immediate attention — at 79% of budget with 5 months remaining, you're 21 percentage points over pace (expected 58%). At the current rate, you're projected to exceed this line by $172K. Review all active vendor contracts and suspend any discretionary engagements that can be deferred to next fiscal year.",
   },
   {
     name: 'Supplies',
     budget: 198000,
     ytdActuals: 160380,
     burnRate: 81.0,
-    projectedYearEnd: 240570,
-    alertStatus: 'concern',
+    projectedYearEnd: 274900,   // ytdActuals / (7/12)
+    alertStatus: 'action',      // +23pp over 58% pace
     narrative:
-      "Supplies spending is running ahead of pace at 81% of the annual budget with 4 months remaining (expected 67%). At the current rate, supplies are projected to overspend by approximately $43K. Review upcoming orders and defer non-essential purchases through year-end.",
+      "Supplies spending requires immediate action — at 81% of budget with 5 months remaining (expected 58%), you're projected to overspend by $77K. Implement a purchase freeze on non-essential supplies today and redirect any remaining classroom budgets to priority items only.",
   },
   {
     name: 'Facilities',
     budget: 312000,
     ytdActuals: 202800,
     burnRate: 65.0,
-    projectedYearEnd: 304200,
-    alertStatus: 'ok',
-    narrative: undefined,
+    projectedYearEnd: 347700,   // ytdActuals / (7/12)
+    alertStatus: 'watch',       // +7pp over 58% pace
+    narrative:
+      "Facilities is running 7 percentage points ahead of pace at 65% of budget (expected 58% through March). At the current run rate, facilities spending is projected to reach $348K against a $312K budget. Review maintenance contracts and defer any discretionary work through year-end.",
   },
   {
     name: 'Transportation',
     budget: 148000,
     ytdActuals: 90280,
     burnRate: 61.0,
-    projectedYearEnd: 135420,
-    alertStatus: 'ok',
+    projectedYearEnd: 154800,   // ytdActuals / (7/12)
+    alertStatus: 'ok',          // +3pp — within normal range
     narrative: undefined,
   },
   {
@@ -218,8 +222,8 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     budget: 185000,
     ytdActuals: 116550,
     burnRate: 63.0,
-    projectedYearEnd: 174825,
-    alertStatus: 'ok',
+    projectedYearEnd: 199800,   // ytdActuals / (7/12)
+    alertStatus: 'ok',          // +5pp — at threshold, ok
     narrative: undefined,
   },
   {
@@ -227,8 +231,8 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     budget: 102000,
     ytdActuals: 59160,
     burnRate: 58.0,
-    projectedYearEnd: 88740,
-    alertStatus: 'ok',
+    projectedYearEnd: 101400,   // ytdActuals / (7/12)
+    alertStatus: 'ok',          // exactly at pace
     narrative: undefined,
   },
 ]
@@ -245,41 +249,43 @@ const SEED_GRANTS: Grant[] = [
 const SEED_ALERTS: Alert[] = [
   {
     id: '1',
-    message: 'Personnel is 7 percentage points ahead of pace (74% spent vs. 67% expected). Monitor overtime and substitute usage — if the trend continues into Q3 it will need intervention.',
+    message: 'Contracted Services requires immediate action — at 79% of budget with 5 months remaining (expected 58%), projected to exceed budget by $172K. Suspend discretionary vendor contracts today.',
     severity: 'warning',
   },
   {
     id: '2',
-    message: 'Supplies is at 81% of budget with 4 months remaining (expected 67%). Projected to overspend by ~$43K. Defer non-essential purchases through year-end.',
+    message: 'Supplies is at 81% of budget with 5 months remaining (expected 58%). Projected to overspend by ~$77K. Implement a purchase freeze on non-essential supplies today.',
     severity: 'warning',
   },
   {
     id: '3',
-    message: 'Contracted services are 12% ahead of budget pace. Review active vendor contracts for opportunities to defer discretionary engagements.',
+    message: 'Personnel is 16 percentage points ahead of pace (74% spent vs. 58% expected). At this trajectory, costs are projected to exceed budget by $833K. Investigate overtime and substitute usage before Q4.',
     severity: 'warning',
   },
   {
     id: '4',
-    message: 'IDEA / Special Education grant is only 49% spent at month 8 of 12. Underspend may affect your future allocation — confirm expenditure plans with your special education coordinator.',
+    message: 'IDEA / Special Education grant is only 49% spent at month 7 of 12 (expected 58%). Underspend may affect your future allocation — confirm expenditure plans with your special education coordinator.',
     severity: 'warning',
   },
 ]
 
+// WA State fiscal year — monthly spend starts September 1. Update when adding multi-state support.
+// Budget column uses OSPI-weighted monthly allocation; amounts show above-pace spending pattern.
 const SEED_MONTHLY_SPEND = [
-  { month: 'Jul', amount: 388000, budget: 429000 },
-  { month: 'Aug', amount: 426000, budget: 429000 },
-  { month: 'Sep', amount: 462000, budget: 429000 },
-  { month: 'Oct', amount: 472000, budget: 429000 },
-  { month: 'Nov', amount: 451000, budget: 429000 },
-  { month: 'Dec', amount: 448000, budget: 429000 },
-  { month: 'Jan', amount: 524000, budget: 429000 },
+  { month: 'Sep', amount: 524000, budget: 464000 },  // 9% OSPI
+  { month: 'Oct', amount: 498000, budget: 412000 },  // 8% OSPI
+  { month: 'Nov', amount: 340000, budget: 258000 },  // 5% OSPI (low month)
+  { month: 'Dec', amount: 547000, budget: 464000 },  // 9% OSPI
+  { month: 'Jan', amount: 615000, budget: 438000 },  // 8.5% OSPI
+  { month: 'Feb', amount: 612000, budget: 464000 },  // 9% OSPI
+  { month: 'Mar', amount: 612000, budget: 464000 },  // 9% OSPI
 ]
 
 const SEED_SNAPSHOT: MonthlySnapshot = {
-  month: '2026-02',
-  label: 'February 2026',
-  uploadedAt: '2026-02-19T09:00:00.000Z',
-  filename: 'cascade_charter_budget_feb2026.xlsx',
+  month: '2026-03',
+  label: 'March 2026',
+  uploadedAt: '2026-03-04T09:00:00.000Z',
+  filename: 'cascade_charter_budget_mar2026.xlsx',
   rowCount: 8,
   budgetCategories: SEED_CATEGORIES,
   grants: SEED_GRANTS,
@@ -289,14 +295,14 @@ const SEED_SNAPSHOT: MonthlySnapshot = {
     totalActuals: 3746520,
     cashOnHand: 892000,
     daysOfReserves: 63,
-    variancePercent: 9.1,
+    variancePercent: 24.7,  // (totalActuals − expected) / expected × 100 at 58% pace
   },
   monthlySpend: SEED_MONTHLY_SPEND,
 }
 
 const SEED_BOARD_PACKETS: BoardPacket[] = [
-  { id: '1', month: 'January 2026', monthKey: '2026-01', status: 'finalized', generatedAt: '2026-01-23' },
-  { id: '2', month: 'February 2026', monthKey: '2026-02', status: 'draft', generatedAt: '2026-02-19' },
+  { id: '1', month: 'February 2026', monthKey: '2026-02', status: 'finalized', generatedAt: '2026-02-19' },
+  { id: '2', month: 'March 2026',    monthKey: '2026-03', status: 'not-started' },
 ]
 
 // ── Write-through helper ───────────────────────────────────────────────────────
@@ -334,11 +340,11 @@ export const useStore = create<AppState>((set, get) => ({
     categories: SEED_CATEGORIES,
     monthlySpend: SEED_MONTHLY_SPEND,
   },
-  grants: [],
+  grants: SEED_GRANTS,
   otherGrants: [],
   alerts: SEED_ALERTS,
-  monthlySnapshots: { '2026-02': SEED_SNAPSHOT },
-  activeMonth: '2026-02',
+  monthlySnapshots: { '2026-03': SEED_SNAPSHOT },
+  activeMonth: '2026-03',
   chatMessages: [],
   boardPackets: SEED_BOARD_PACKETS,
 
@@ -365,15 +371,17 @@ export const useStore = create<AppState>((set, get) => ({
         supabase.from('schools').update({ name: 'Cascade Charter School' }).eq('id', schoolId)
           .then(({ error }) => { if (error) console.error('[store] fixSchoolName', error) })
       }
+      // Fall back to existing store values (seed) for fields not yet saved by the user
+      const existing = get().schoolProfile
       set({
         schoolProfile: {
           name: schoolName,
-          authorizer: school.authorizer,
-          gradeConfig: school.grade_config,
-          currentFTES: Number(school.current_ftes),
-          priorYearFTES: Number(school.prior_year_ftes ?? 0),
-          nextBoardMeeting: school.next_board_meeting ?? '',
-          nextFinanceCommittee: school.next_finance_committee ?? '',
+          authorizer: school.authorizer || existing.authorizer,
+          gradeConfig: school.grade_config || existing.gradeConfig,
+          currentFTES: Number(school.current_ftes) || existing.currentFTES,
+          priorYearFTES: Number(school.prior_year_ftes) || existing.priorYearFTES,
+          nextBoardMeeting: school.next_board_meeting || existing.nextBoardMeeting,
+          nextFinanceCommittee: school.next_finance_committee || existing.nextFinanceCommittee,
         },
       })
     }
@@ -384,6 +392,9 @@ export const useStore = create<AppState>((set, get) => ({
       .select('*')
       .eq('school_id', schoolId)
       .order('month_key', { ascending: true })
+
+    // Track snapshot grant spent values so step 3 can fall back to them when DB has 0.
+    let snapshotGrantSpent = new Map<string, number>()
 
     if (snapshotRows && snapshotRows.length > 0) {
       const monthlySnapshots: Record<string, MonthlySnapshot> = {}
@@ -420,14 +431,19 @@ export const useStore = create<AppState>((set, get) => ({
 
       const latestKey = snapshotRows[snapshotRows.length - 1].month_key
       const latestSnap = monthlySnapshots[latestKey]
+      const existingFinancial = get().financialData
+      // Build spent fallback map so step 3 can restore non-zero spent values clobbered in the DB.
+      snapshotGrantSpent = new Map(
+        latestSnap.grants.map((g) => [g.name.toLowerCase(), g.spent])
+      )
       set({
         monthlySnapshots,
         activeMonth: latestKey,
         financialData: {
           totalBudget: latestSnap.financialSummary.totalBudget,
           ytdSpending: latestSnap.financialSummary.totalActuals,
-          cashOnHand: latestSnap.financialSummary.cashOnHand,
-          daysOfReserves: latestSnap.financialSummary.daysOfReserves,
+          cashOnHand: latestSnap.financialSummary.cashOnHand || existingFinancial.cashOnHand,
+          daysOfReserves: latestSnap.financialSummary.daysOfReserves || existingFinancial.daysOfReserves,
           variancePercent: latestSnap.financialSummary.variancePercent,
           categories: latestSnap.budgetCategories,
           monthlySpend: latestSnap.monthlySpend,
@@ -460,15 +476,28 @@ export const useStore = create<AppState>((set, get) => ({
       .eq('school_id', schoolId)
       .order('sort_order', { ascending: true })
 
-    const categoricalGrants: Grant[] = (grantRows ?? [])
+    // Deduplicate categorical grants by name — keep the one with the highest award amount.
+    // Duplicates arise when a grant is added manually in Settings and also imported from a file.
+    const rawCategorical = (grantRows ?? [])
       .filter((g) => g.grant_type === 'categorical')
-      .map((g) => ({
-        id: g.id,
-        name: g.name,
-        awardAmount: Number(g.award_amount),
-        spent: Number(g.spent_to_date),
-        status: (g.restrictions as GrantStatus) ?? 'on-pace',
-      }))
+      .map((g) => {
+        const dbSpent = Number(g.spent_to_date)
+        const snapSpent = snapshotGrantSpent.get((g.name as string).toLowerCase()) ?? 0
+        return {
+          id: g.id as string,
+          name: g.name as string,
+          awardAmount: Number(g.award_amount),
+          spent: dbSpent > 0 ? dbSpent : snapSpent,
+          status: (g.restrictions as GrantStatus) ?? 'on-pace',
+        }
+      })
+    const grantByName = new Map<string, Grant>()
+    for (const g of rawCategorical) {
+      const key = g.name.toLowerCase()
+      const existing = grantByName.get(key)
+      if (!existing || g.awardAmount > existing.awardAmount) grantByName.set(key, g)
+    }
+    const categoricalGrants: Grant[] = Array.from(grantByName.values())
 
     const otherGrantList: OtherGrant[] = (grantRows ?? [])
       .filter((g) => g.grant_type === 'other')
@@ -571,7 +600,18 @@ export const useStore = create<AppState>((set, get) => ({
   // ── Grants ──
 
   addGrant: (grant) => {
-    set((state) => ({ grants: [...state.grants, grant] }))
+    // Deduplicate by name — if a grant with the same name exists, update it instead of adding a duplicate.
+    set((state) => {
+      const existingIdx = state.grants.findIndex(
+        (g) => g.name.toLowerCase() === grant.name.toLowerCase()
+      )
+      if (existingIdx >= 0) {
+        const updated = [...state.grants]
+        updated[existingIdx] = { ...updated[existingIdx], ...grant }
+        return { grants: updated }
+      }
+      return { grants: [...state.grants, grant] }
+    })
     const { schoolId } = get()
     if (schoolId) {
       writeThrough(async (supabase) => {
@@ -799,7 +839,7 @@ export const useStore = create<AppState>((set, get) => ({
           id: existing?.id ?? crypto.randomUUID(),
           name: g.name,
           awardAmount: g.awardAmount,
-          spent: g.spent,
+          spent: g.spent > 0 ? g.spent : (existing?.spent ?? 0),
           status,
         }
       })
@@ -849,13 +889,16 @@ export const useStore = create<AppState>((set, get) => ({
           for (const grant of snapshotGrants) {
             const wasExisting = existingGrants.some((eg) => eg.id === grant.id)
             if (wasExisting) {
+              const updatePayload: Record<string, unknown> = {
+                award_amount: grant.awardAmount,
+                restrictions: grant.status,
+              }
+              // Only update spent_to_date when the import has a real value — don't clobber
+              // existing spent data with 0 when the CSV had no grant-spent column.
+              if (grant.spent > 0) updatePayload.spent_to_date = grant.spent
               const { error } = await supabase
                 .from('grants')
-                .update({
-                  award_amount: grant.awardAmount,
-                  spent_to_date: grant.spent,
-                  restrictions: grant.status,
-                })
+                .update(updatePayload)
                 .eq('id', grant.id)
                 .eq('school_id', schoolId)
               if (error) console.error('[store] importFinancialData update grant', { message: error.message, code: error.code, details: error.details, hint: error.hint })
@@ -954,22 +997,35 @@ export const useStore = create<AppState>((set, get) => ({
     const { schoolId } = get()
     if (schoolId) {
       writeThrough(async (supabase) => {
-        const packet = get().boardPackets.find((p) => p.monthKey === monthKey)
-        const { error } = await supabase
+        // Try update first; if no rows matched (new packet), insert instead.
+        // Avoids relying on a unique constraint for upsert conflict resolution.
+        const payload = {
+          month_label: label,
+          status: 'draft' as const,
+          generated_at: now,
+          content,
+        }
+        const { data: updated, error: updateError } = await supabase
           .from('board_packets')
-          .upsert(
-            {
-              id: packet?.id ?? undefined,
+          .update(payload)
+          .eq('school_id', schoolId)
+          .eq('month_key', monthKey)
+          .select('id')
+        if (updateError) {
+          console.error('[store] saveBoardPacket update', updateError)
+          return
+        }
+        if (!updated || updated.length === 0) {
+          // No existing row — insert
+          const { error: insertError } = await supabase
+            .from('board_packets')
+            .insert({
               school_id: schoolId,
               month_key: monthKey,
-              month_label: label,
-              status: 'draft',
-              generated_at: now,
-              content,
-            },
-            { onConflict: 'school_id,month_key' }
-          )
-        if (error) console.error('[store] saveBoardPacket', error)
+              ...payload,
+            })
+          if (insertError) console.error('[store] saveBoardPacket insert', insertError)
+        }
       })
     }
   },

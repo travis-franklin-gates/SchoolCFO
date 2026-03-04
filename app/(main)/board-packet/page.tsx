@@ -18,11 +18,12 @@ import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, labelFromKey } from '
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// WA OSPI 2025-26 actual apportionment schedule (% of annual state aid)
+// WA OSPI 2025-26 apportionment schedule (% of annual state aid per calendar month).
+// Ordered here Sep→Aug to match WA State fiscal year. Update when adding multi-state support.
 const OSPI_PCT: Record<string, number> = {
-  '07': 12.5, '08': 10.0, '09': 9.0, '10': 8.0,
-  '11': 5.0,  '12': 9.0,  '01': 8.5, '02': 9.0,
-  '03': 9.0,  '04': 9.0,  '05': 5.0, '06': 6.0,
+  '09': 9.0,  '10': 8.0,  '11': 5.0,  '12': 9.0,
+  '01': 8.5,  '02': 9.0,  '03': 9.0,  '04': 9.0,
+  '05': 5.0,  '06': 6.0,  '07': 12.5, '08': 10.0,
 }
 
 const AP_WARRANTS = [
@@ -122,7 +123,7 @@ export default function BoardPacketPage() {
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editBuffer, setEditBuffer] = useState('')
 
-  if (!isLoaded) {
+  if (!isLoaded && Object.keys(monthlySnapshots).length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-4 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
@@ -161,7 +162,18 @@ export default function BoardPacketPage() {
   const expectedPct = Math.round(pace * 100)
   const { categories, totalBudget, ytdSpending, cashOnHand, daysOfReserves, variancePercent } =
     financialData
-  const flaggedCategories = categories.filter((c) => c.alertStatus !== 'ok')
+
+  // Re-derive alert status from burnRate at render time so stale Supabase values
+  // don't produce wrong badges. Thresholds match Budget Analysis page exactly.
+  const deriveAlertStatus = (burnRate: number): string => {
+    const overPace = burnRate / 100 - pace
+    if (overPace > 0.20) return 'action'
+    if (overPace > 0.10) return 'concern'
+    if (overPace > 0.05) return 'watch'
+    return 'ok'
+  }
+
+  const flaggedCategories = categories.filter((c) => deriveAlertStatus(c.burnRate) !== 'ok')
 
   // OSPI Cash Flow projection
   const activeFiscalIdx = fiscalIndexFromKey(activeMonth)
@@ -522,7 +534,7 @@ export default function BoardPacketPage() {
                     const ytdBudget = Math.round(cat.budget * pace)
                     const varDollar = cat.ytdActuals - ytdBudget
                     const varPct = ytdBudget > 0 ? ((cat.ytdActuals - ytdBudget) / ytdBudget) * 100 : 0
-                    const cfg = STATUS_CFG[cat.alertStatus] ?? STATUS_CFG.ok
+                    const cfg = STATUS_CFG[deriveAlertStatus(cat.burnRate)] ?? STATUS_CFG.ok
                     return (
                       <tr key={cat.name} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                         <td className="px-3 py-2 font-medium text-gray-800">{cat.name}</td>
@@ -735,7 +747,7 @@ export default function BoardPacketPage() {
               <div className="space-y-4">
                 {content.varianceExplanations.map((ve, i) => {
                   const cat = categories.find((c) => c.name === ve.category)
-                  const cfg = cat ? (STATUS_CFG[cat.alertStatus] ?? STATUS_CFG.ok) : STATUS_CFG.watch
+                  const cfg = cat ? (STATUS_CFG[deriveAlertStatus(cat.burnRate)] ?? STATUS_CFG.ok) : STATUS_CFG.watch
                   const editKey = `variance-${ve.category}`
                   return (
                     <div key={ve.category} className={`rounded-lg border p-4 ${i % 2 === 0 ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-100'}`}>

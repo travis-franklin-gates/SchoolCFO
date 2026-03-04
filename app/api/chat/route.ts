@@ -1,15 +1,18 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { fiscalIndexFromKey } from '@/lib/fiscalYear'
 
-const client = new Anthropic()
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 function buildSystemPrompt(
   schoolProfile: Record<string, unknown>,
   financialData: Record<string, unknown>,
   grants: Array<Record<string, unknown>>,
   alerts: Array<Record<string, unknown>>,
-  otherGrants: Array<Record<string, unknown>>
+  otherGrants: Array<Record<string, unknown>>,
+  activeMonth: string
 ): string {
-  const monthsElapsed = 7
+  // WA State fiscal year — September 1 start. Update when adding multi-state support.
+  const monthsElapsed = fiscalIndexFromKey(activeMonth)
   const totalMonths = 12
   const pacePercent = ((monthsElapsed / totalMonths) * 100).toFixed(0)
 
@@ -65,6 +68,8 @@ Always ground your answers in the school's actual financial data below. Avoid ac
 
 Always end your response with a section called "Your Next 3 Actions" that lists exactly three specific, concrete steps the school leader should take this week, numbered 1-2-3, written in plain language with no jargon. These should be the highest-leverage actions given the current financial situation.
 
+If the user has attached a document (vendor proposal, contract, invoice, spreadsheet, or other file), analyze it in the context of the school's financial situation. For vendor proposals or contracts, evaluate affordability, hidden costs, and SEBB/FICA implications for new staff. For spreadsheets or budget documents, reconcile them against the school's current financial snapshot.
+
 CURRENT SCHOOL:
 School: ${sp.name}
 Authorizer: ${sp.authorizer}
@@ -96,13 +101,13 @@ ${alerts.map((a) => {
 
 export async function POST(req: Request) {
   try {
-    const { messages, schoolProfile, financialData, grants, alerts, otherGrants = [] } = await req.json()
+    const { messages, schoolProfile, financialData, grants, alerts, otherGrants = [], activeMonth = '2026-03' } = await req.json()
 
-    const systemPrompt = buildSystemPrompt(schoolProfile, financialData, grants, alerts, otherGrants)
+    const systemPrompt = buildSystemPrompt(schoolProfile, financialData, grants, alerts, otherGrants, activeMonth)
 
     const stream = client.messages.stream({
       model: 'claude-opus-4-6',
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: systemPrompt,
       messages,
     })

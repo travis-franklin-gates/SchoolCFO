@@ -719,9 +719,11 @@ export const useStore = create<AppState>((set, get) => ({
 
     const newCategories: BudgetCategory[] = categories.map((cat) => {
       const burnRate = cat.budget > 0 ? (cat.ytdActuals / cat.budget) * 100 : 0
-      const variance = burnRate - pace * 100
+      // Relative % over expected pace (aligns with budget-analysis display)
+      const expectedPacePct = pace * 100
+      const variance = expectedPacePct > 0 ? (burnRate - expectedPacePct) / expectedPacePct * 100 : 0
       let alertStatus: BudgetAlertStatus
-      if (variance > 15) alertStatus = 'action'
+      if (variance > 20) alertStatus = 'action'
       else if (variance > 10) alertStatus = 'concern'
       else if (variance > 5) alertStatus = 'watch'
       else if (variance < -20) alertStatus = 'watch'

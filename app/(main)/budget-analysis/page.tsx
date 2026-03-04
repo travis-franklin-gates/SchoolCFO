@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, AlertTriangle, Info } from 'lucide-react'
 import { useStore, type BudgetAlertStatus } from '@/lib/store'
+import { paceFromKey, fiscalIndexFromKey } from '@/lib/fiscalYear'
 
 function fmt(n: number) {
   return n >= 0 ? `$${n.toLocaleString()}` : `-$${Math.abs(n).toLocaleString()}`
@@ -11,10 +12,6 @@ function fmt(n: number) {
 function fmtPct(n: number) {
   return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
 }
-
-const MONTHS_ELAPSED = 7
-const TOTAL_MONTHS = 12
-const PACE = MONTHS_ELAPSED / TOTAL_MONTHS
 
 const statusConfig: Record<BudgetAlertStatus, { label: string; badge: string; row: string }> = {
   ok: {
@@ -40,7 +37,7 @@ const statusConfig: Record<BudgetAlertStatus, { label: string; badge: string; ro
 }
 
 export default function BudgetAnalysisPage() {
-  const { financialData, isLoaded, monthlySnapshots } = useStore()
+  const { financialData, isLoaded, monthlySnapshots, activeMonth } = useStore()
   const [expanded, setExpanded] = useState<string | null>(null)
 
   if (!isLoaded) {
@@ -61,7 +58,7 @@ export default function BudgetAnalysisPage() {
         </p>
         <a
           href="/upload"
-          className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-lg"
+          className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-xl"
           style={{ backgroundColor: '#1e3a5f' }}
         >
           Upload data
@@ -70,10 +67,14 @@ export default function BudgetAnalysisPage() {
     )
   }
 
+  const PACE = paceFromKey(activeMonth)
+  const MONTHS_ELAPSED = fiscalIndexFromKey(activeMonth)
+  const TOTAL_MONTHS = 12
+
   const categories = financialData.categories.map((cat) => {
     const expectedToDate = cat.budget * PACE
     const varianceDollar = cat.ytdActuals - expectedToDate
-    const variancePct = (varianceDollar / expectedToDate) * 100
+    const variancePct = expectedToDate > 0 ? (varianceDollar / expectedToDate) * 100 : 0
     return { ...cat, varianceDollar, variancePct }
   })
 
@@ -92,21 +93,17 @@ export default function BudgetAnalysisPage() {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-5 text-xs text-gray-500">
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-green-400 inline-block" />
+      <div className="flex items-center gap-4 flex-wrap text-xs text-gray-500">
+        <span className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-800 font-medium">
           On Track
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block" />
+        <span className="inline-flex items-center px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 font-medium">
           Watch
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-orange-400 inline-block" />
+        <span className="inline-flex items-center px-3 py-1 rounded-full bg-orange-100 text-orange-800 font-medium">
           Concern
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block" />
+        <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-800 font-medium">
           Action Required
         </span>
         <span className="ml-auto text-gray-400">
@@ -115,7 +112,7 @@ export default function BudgetAnalysisPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Header row */}
         <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 bg-gray-50 border-b border-gray-200 px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
           <div>Category</div>
@@ -168,13 +165,15 @@ export default function BudgetAnalysisPage() {
                   {fmt(Math.round(cat.varianceDollar))}
                 </div>
 
-                {/* Variance % */}
+                {/* Variance % — aligned with new 5/10/20 thresholds */}
                 <div
                   className={`text-right font-medium ${
-                    cat.variancePct > 5
+                    cat.variancePct > 20
                       ? 'text-red-600'
-                      : cat.variancePct > 0
+                      : cat.variancePct > 10
                       ? 'text-orange-600'
+                      : cat.variancePct > 5
+                      ? 'text-yellow-600'
                       : 'text-green-600'
                   }`}
                 >
@@ -214,7 +213,7 @@ export default function BudgetAnalysisPage() {
                 {/* Status */}
                 <div className="flex justify-center">
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.badge}`}
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${cfg.badge}`}
                   >
                     {cfg.label}
                   </span>
@@ -223,7 +222,7 @@ export default function BudgetAnalysisPage() {
 
               {/* Narrative */}
               {isExpanded && cat.narrative && (
-                <div className="px-12 py-4 bg-blue-50/60 border-b border-gray-100">
+                <div className="px-12 py-4 bg-blue-50/60 border-b border-gray-100 border-l-4 border-l-blue-400">
                   <div className="flex gap-3">
                     <Info size={15} className="text-blue-500 shrink-0 mt-0.5" />
                     <div>

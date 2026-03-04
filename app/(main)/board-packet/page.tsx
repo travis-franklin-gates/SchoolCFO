@@ -61,10 +61,11 @@ function fmtFull(n: number) {
   return (n < 0 ? '-$' : '$') + Math.abs(Math.round(n)).toLocaleString()
 }
 
-function fmtDate(s: string) {
-  return new Date(s + 'T12:00:00').toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric',
-  })
+function fmtDate(s: string | undefined | null) {
+  if (!s) return '—'
+  const d = new Date(s + 'T12:00:00')
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
 function fmtPct(n: number, decimals = 1) {
@@ -406,7 +407,7 @@ export default function BoardPacketPage() {
       </div>
 
       {/* Status bar */}
-      <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 flex items-center justify-between">
+      <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3 text-sm text-gray-600">
           <Clock size={14} className="text-gray-400" />
           <span>Next board meeting: <span className="font-medium text-gray-800">{fmtDate(schoolProfile.nextBoardMeeting)}</span></span>
@@ -416,7 +417,7 @@ export default function BoardPacketPage() {
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500">{monthLabel}</span>
           {currentPacket && (
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${PACKET_STATUS_CFG[currentPacket.status].cls}`}>
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${PACKET_STATUS_CFG[currentPacket.status].cls}`}>
               {PACKET_STATUS_CFG[currentPacket.status].label}
             </span>
           )}
@@ -441,7 +442,7 @@ export default function BoardPacketPage() {
 
       {/* Generate card (shown when no content yet) */}
       {!hasContent && activeSnap && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="font-semibold text-gray-800 mb-4">Generate Board Packet for {monthLabel}</h2>
           <div className="bg-gray-50 border border-gray-100 rounded-lg p-4 mb-5">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Packet includes</p>
@@ -486,7 +487,7 @@ export default function BoardPacketPage() {
       {hasContent && content && (
         <div
           ref={printRef}
-          className="bg-white border border-gray-200 rounded-lg p-8 space-y-2"
+          className="bg-white border border-gray-200 rounded-xl p-8 space-y-2"
         >
           {/* Cover */}
           <div className="text-center pb-6 mb-6 border-b-2 border-[#1e3a5f]">
@@ -855,11 +856,11 @@ export default function BoardPacketPage() {
       <div>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Packet History</h2>
         {sortedPackets.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 px-5 py-8 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 px-5 py-8 text-center">
             <p className="text-sm text-gray-400">No packets generated yet</p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {sortedPackets.map((packet) => (
               <div key={packet.id} className="flex items-center gap-4 px-5 py-4">
                 <FileText size={17} className="text-gray-400 shrink-0" />
@@ -871,7 +872,7 @@ export default function BoardPacketPage() {
                     </p>
                   )}
                 </div>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${PACKET_STATUS_CFG[packet.status].cls}`}>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${PACKET_STATUS_CFG[packet.status].cls}`}>
                   {PACKET_STATUS_CFG[packet.status].label}
                 </span>
                 {packet.content && (

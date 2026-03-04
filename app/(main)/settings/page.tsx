@@ -332,7 +332,7 @@ export default function SettingsPage() {
       </div>
 
       {/* ── School Profile ── */}
-      <form onSubmit={saveProfile} className="bg-white rounded-lg border border-gray-200 p-6">
+      <form onSubmit={saveProfile} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 className="font-semibold text-gray-800 mb-5">School Profile</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
@@ -396,7 +396,7 @@ export default function SettingsPage() {
       </form>
 
       {/* ── Important Dates ── */}
-      <form onSubmit={saveDates} className="bg-white rounded-lg border border-gray-200 p-6">
+      <form onSubmit={saveDates} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 className="font-semibold text-gray-800 mb-5">Important Dates</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -431,7 +431,7 @@ export default function SettingsPage() {
       </form>
 
       {/* ── Categorical Grants ── */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="font-semibold text-gray-800">Categorical Grants</h2>
@@ -546,7 +546,7 @@ export default function SettingsPage() {
       </div>
 
       {/* ── Other Grants & Philanthropic Funding ── */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-1">
           <div>
             <h2 className="font-semibold text-gray-800">Other Grants &amp; Philanthropic Funding</h2>

@@ -72,10 +72,11 @@ function fmtTimestamp(iso: string) {
 }
 
 function deriveAlertStatus(budget: number, ytdActuals: number, expectedPct: number) {
-  if (budget === 0) return 'ok' as const
+  if (budget === 0 || expectedPct === 0) return 'ok' as const
   const burnRate = (ytdActuals / budget) * 100
-  const variance = burnRate - expectedPct
-  if (variance > 15) return 'action' as const
+  // Relative % over expected pace (consistent with store and budget-analysis display)
+  const variance = (burnRate - expectedPct) / expectedPct * 100
+  if (variance > 20) return 'action' as const
   if (variance > 10) return 'concern' as const
   if (variance > 5) return 'watch' as const
   if (variance < -20) return 'watch' as const
@@ -277,7 +278,7 @@ export default function UploadPage() {
               <div key={s} className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
                   <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                       done
                         ? 'bg-green-500 text-white'
                         : active
@@ -374,7 +375,7 @@ export default function UploadPage() {
 
       {/* ── STEP: PREVIEW ── */}
       {step === 'preview' && (
-        <div className="bg-white rounded-lg border border-gray-200">
+        <div className="bg-white rounded-xl border border-gray-200">
           {/* File info bar */}
           <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
             <FileSpreadsheet size={18} className="text-gray-400 shrink-0" />
@@ -466,7 +467,7 @@ export default function UploadPage() {
           </div>
 
           {columnMappings.map((m) => (
-            <div key={m.columnIndex} className="bg-white rounded-lg border border-gray-200 p-5">
+            <div key={m.columnIndex} className="bg-white rounded-xl border border-gray-200 p-5">
               <div className="flex items-start gap-4">
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-800 mb-0.5">
@@ -527,7 +528,7 @@ export default function UploadPage() {
       {step === 'confirmation' && (
         <div className="space-y-5">
           {/* Month selector + summary */}
-          <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             {/* Month selector */}
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1.5">
@@ -586,7 +587,7 @@ export default function UploadPage() {
           </div>
 
           {/* Preview table of mapped data */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1.2fr] bg-gray-50 border-b border-gray-200 px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
               <div>Category</div>
               <div className="text-right">Budget</div>
@@ -651,7 +652,7 @@ export default function UploadPage() {
 
           {/* Grant preview — only shown when grant columns were detected */}
           {mappedGrants.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
                 <Award size={14} className="text-[#1e3a5f]" />
                 <span className="text-sm font-semibold text-gray-800">
@@ -740,11 +741,11 @@ export default function UploadPage() {
       <div>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Upload History</h2>
         {historyMonths.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 px-5 py-8 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 px-5 py-8 text-center">
             <p className="text-sm text-gray-400">No uploads yet</p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {historyMonths.map((fm) => {
               const snap = monthlySnapshots[fm.key]!
               return (

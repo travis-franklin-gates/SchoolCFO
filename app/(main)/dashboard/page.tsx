@@ -22,8 +22,11 @@ function fmt(n: number) {
   return `$${n}`
 }
 
-function fmtDate(s: string) {
-  return new Date(s + 'T12:00:00').toLocaleDateString('en-US', {
+function fmtDate(s: string | undefined | null) {
+  if (!s) return '—'
+  const d = new Date(s + 'T12:00:00')
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -60,7 +63,7 @@ export default function DashboardPage() {
         </p>
         <a
           href="/upload"
-          className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-lg"
+          className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-xl"
           style={{ backgroundColor: '#1e3a5f' }}
         >
           Upload your first file
@@ -79,10 +82,26 @@ export default function DashboardPage() {
   const activeSnap = monthlySnapshots[activeMonth]
   const availableMonths = getFiscalMonths().filter((fm) => monthlySnapshots[fm.key])
 
-  const criticalAlert = alerts.find((a) => a.severity === 'critical')
+  const criticalAlerts = alerts.filter((a) => a.severity === 'critical')
+  const warningAlerts = alerts.filter((a) => a.severity === 'warning')
   const latestPacket = [...boardPackets].sort((a, b) => (a.id > b.id ? -1 : 1))[0]
 
   const spendData = financialData.monthlySpend
+
+  // Health score
+  const hasAction = financialData.categories.some((c) => c.alertStatus === 'action')
+  const hasConcern = financialData.categories.some((c) => c.alertStatus === 'concern')
+  const lowReserves = financialData.daysOfReserves < 30
+  const watchReserves = financialData.daysOfReserves < 45
+
+  let healthScore: { label: string; color: string }
+  if (hasAction || lowReserves) {
+    healthScore = { label: 'At Risk', color: 'bg-red-100 text-red-700' }
+  } else if (hasConcern || watchReserves) {
+    healthScore = { label: 'Needs Attention', color: 'bg-amber-100 text-amber-700' }
+  } else {
+    healthScore = { label: 'On Track', color: 'bg-green-100 text-green-700' }
+  }
 
   // Build cumulative projections chart from all available snapshots
   const projTotalBudget = financialData.totalBudget
@@ -97,7 +116,6 @@ export default function DashboardPage() {
     const cumulativeBudget = Math.round((projTotalBudget * fm.fiscalIndex) / 12)
     const actual = snap ? snap.financialSummary.totalActuals : null
 
-    // Project forward from the last snapshot
     let projected: number | null = null
     if (lastSnap && lastFiscalIdx > 0 && fm.fiscalIndex >= lastFiscalIdx) {
       projected = Math.round(
@@ -133,6 +151,7 @@ export default function DashboardPage() {
       value: fmt(financialData.ytdSpending),
       sub: `${((financialData.ytdSpending / financialData.totalBudget) * 100).toFixed(1)}% of annual budget`,
       icon: TrendingUp,
+      iconBg: 'bg-orange-100',
       accent: 'text-orange-500',
     },
     {
@@ -140,6 +159,7 @@ export default function DashboardPage() {
       value: fmt(financialData.totalBudget),
       sub: 'Annual allocation',
       icon: DollarSign,
+      iconBg: 'bg-blue-100',
       accent: 'text-blue-600',
     },
     {
@@ -152,6 +172,7 @@ export default function DashboardPage() {
             : `${fmt(Math.abs(projectedOverUnder))} under budget`
           : 'No data yet',
       icon: Calendar,
+      iconBg: projectedOverUnder != null && projectedOverUnder > 0 ? 'bg-red-100' : 'bg-green-100',
       accent:
         projectedOverUnder != null && projectedOverUnder > 0
           ? 'text-red-500'
@@ -160,8 +181,9 @@ export default function DashboardPage() {
     {
       label: 'Active Alerts',
       value: String(alerts.length),
-      sub: `${alerts.filter((a) => a.severity === 'critical').length} critical`,
+      sub: `${criticalAlerts.length} critical`,
       icon: Bell,
+      iconBg: 'bg-red-100',
       accent: 'text-red-500',
     },
   ]
@@ -169,10 +191,15 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6 max-w-6xl">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Morning Briefing</h1>
-          <p className="text-gray-500 mt-1 text-sm">{today}</p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Morning Briefing</h1>
+            <p className="text-gray-500 mt-1 text-sm">{today}</p>
+          </div>
+          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${healthScore.color}`}>
+            {healthScore.label}
+          </span>
         </div>
         {availableMonths.length > 1 && (
           <div className="flex items-center gap-2">
@@ -192,20 +219,26 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Alert Banner */}
-      {criticalAlert && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={18} />
-          <p className="text-sm text-red-800">
-            <span className="font-semibold">{schoolProfile.name}</span> has{' '}
-            {alerts.length} active alert{alerts.length !== 1 ? 's' : ''} —{' '}
-            {criticalAlert.message}
-          </p>
+      {/* Alert Banner — all alerts */}
+      {alerts.length > 0 && (
+        <div className="rounded-xl overflow-hidden shadow-sm">
+          {criticalAlerts.map((alert) => (
+            <div key={alert.id} className="bg-red-50 border-l-4 border-red-500 px-4 py-3 flex items-start gap-3 border-b border-red-100 last:border-b-0">
+              <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={16} />
+              <p className="text-sm text-red-800">{alert.message}</p>
+            </div>
+          ))}
+          {warningAlerts.map((alert) => (
+            <div key={alert.id} className="bg-amber-50 border-l-4 border-amber-400 px-4 py-3 flex items-start gap-3 border-b border-amber-100 last:border-b-0">
+              <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={16} />
+              <p className="text-sm text-amber-800">{alert.message}</p>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Data Status */}
-      <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 flex items-center justify-between">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-4 py-3 flex items-center justify-between">
         <span className="text-sm text-gray-500 font-medium">Financial Data</span>
         {activeSnap ? (
           <span className="text-sm text-gray-500">
@@ -222,9 +255,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Spend Rate */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Spend Rate</h2>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={spendData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
@@ -259,8 +292,8 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </div>
 
-        {/* Projections — cumulative YTD from all snapshots */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
+        {/* Projections */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Projections</h2>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart
@@ -311,7 +344,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Budget vs Actuals */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">Budget vs. Actuals by Category</h2>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart
@@ -331,22 +364,24 @@ export default function DashboardPage() {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        {metricCards.map(({ label, value, sub, icon: Icon, accent }) => (
-          <div key={label} className="bg-white rounded-lg border border-gray-200 p-5">
-            <div className="flex items-start justify-between mb-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {metricCards.map(({ label, value, sub, icon: Icon, iconBg, accent }) => (
+          <div key={label} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <div className="flex items-start justify-between mb-3">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</p>
-              <Icon className={accent} size={16} />
+              <div className={`w-9 h-9 rounded-lg ${iconBg} flex items-center justify-center`}>
+                <Icon className={accent} size={18} />
+              </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
-            <p className="text-xs text-gray-500 mt-1">{sub}</p>
+            <p className="text-3xl font-bold text-gray-900">{value}</p>
+            <p className="text-sm text-gray-500 mt-1">{sub}</p>
           </div>
         ))}
       </div>
 
       {/* Board Packet Status */}
       {latestPacket && (
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">Board Packet Status</h2>
           <div className="flex items-center justify-between">
             <div>

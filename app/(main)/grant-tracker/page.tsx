@@ -99,7 +99,7 @@ export default function GrantTrackerPage() {
         </h2>
 
         {/* Summary bar */}
-        <div className="bg-white rounded-lg border border-gray-200 px-5 py-4 flex items-center justify-between">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 flex items-center justify-between">
           <div className="flex gap-8">
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Total Awards</p>
@@ -120,7 +120,7 @@ export default function GrantTrackerPage() {
         </div>
 
         {/* Grant cards */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {grants.map((grant) => {
             const cfg = statusConfig[grant.status]
             const spentPct = (grant.spent / grant.awardAmount) * 100
@@ -130,7 +130,7 @@ export default function GrantTrackerPage() {
             return (
               <div
                 key={grant.id}
-                className={`bg-white rounded-lg border p-5 ${
+                className={`bg-white rounded-xl shadow-sm border p-5 ${
                   grant.status === 'underspend-risk' ? 'border-orange-200' : 'border-gray-200'
                 }`}
               >
@@ -139,7 +139,7 @@ export default function GrantTrackerPage() {
                     {grant.name}
                   </h3>
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${cfg.badge}`}
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shrink-0 ${cfg.badge}`}
                   >
                     {cfg.label}
                   </span>
@@ -173,12 +173,12 @@ export default function GrantTrackerPage() {
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-2 relative">
                     <div
-                      className="absolute top-0 h-2 w-0.5 bg-gray-400 rounded"
+                      className="absolute top-0 h-2.5 w-0.5 bg-gray-400 rounded"
                       style={{ left: `${pacePct}%` }}
                       title={`Expected: ${pacePct}%`}
                     />
                     <div
-                      className={`h-2 rounded-full transition-all ${cfg.bar}`}
+                      className={`h-2.5 rounded-full transition-all ${cfg.bar}`}
                       style={{ width: `${Math.min(spentPct, 100)}%` }}
                     />
                   </div>
@@ -216,7 +216,7 @@ export default function GrantTrackerPage() {
         ) : (
           <>
             {/* Summary bar */}
-            <div className="bg-white rounded-lg border border-gray-200 px-5 py-4 flex items-center justify-between">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 flex items-center justify-between">
               <div className="flex gap-8">
                 <div>
                   <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Total Awards</p>
@@ -240,7 +240,7 @@ export default function GrantTrackerPage() {
             </div>
 
             {/* Other grant cards */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {otherGrants.map((grant) => {
                 const cfg = restrictionConfig[grant.restrictions]
                 const spentPct =
@@ -259,7 +259,7 @@ export default function GrantTrackerPage() {
                 return (
                   <div
                     key={grant.id}
-                    className={`bg-white rounded-lg border p-5 ${
+                    className={`bg-white rounded-xl shadow-sm border p-5 ${
                       isLow ? 'border-amber-200' : 'border-gray-200'
                     }`}
                   >
@@ -268,7 +268,7 @@ export default function GrantTrackerPage() {
                         {grant.name}
                       </h3>
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${cfg.badge}`}
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shrink-0 ${cfg.badge}`}
                       >
                         {cfg.label}
                       </span>
@@ -301,14 +301,14 @@ export default function GrantTrackerPage() {
                         <span>Spend rate vs. grant timeline</span>
                         <span className="font-medium text-gray-700">{spentPct.toFixed(0)}%</span>
                       </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2 relative">
+                      <div className="w-full bg-gray-100 rounded-full h-2.5 relative">
                         <div
-                          className="absolute top-0 h-2 w-0.5 bg-gray-400 rounded"
+                          className="absolute top-0 h-2.5 w-0.5 bg-gray-400 rounded"
                           style={{ left: `${Math.min(grantPacePct, 99)}%` }}
                           title={`Grant timeline: ${grantPacePct}% elapsed`}
                         />
                         <div
-                          className={`h-2 rounded-full transition-all ${
+                          className={`h-2.5 rounded-full transition-all ${
                             isLow ? 'bg-amber-500' : 'bg-[#1e3a5f]'
                           }`}
                           style={{ width: `${Math.min(spentPct, 100)}%` }}

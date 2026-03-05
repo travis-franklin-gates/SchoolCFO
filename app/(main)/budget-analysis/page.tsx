@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, AlertTriangle, Info } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Info, BarChart2 } from 'lucide-react'
 import { useStore, type BudgetAlertStatus } from '@/lib/store'
 import { paceFromKey, fiscalIndexFromKey } from '@/lib/fiscalYear'
 
@@ -39,23 +39,25 @@ export default function BudgetAnalysisPage() {
   if (!isLoaded && Object.keys(monthlySnapshots).length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-[3px] rounded-full animate-spin" style={{ borderColor: 'var(--brand-200)', borderTopColor: 'var(--brand-600)' }} />
       </div>
     )
   }
 
   if (isLoaded && Object.keys(monthlySnapshots).length === 0) {
     return (
-      <div className="max-w-lg mx-auto mt-16 text-center">
-        <div className="text-4xl mb-4">📋</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">No budget data yet</h1>
+      <div className="max-w-lg mx-auto mt-16 text-center page-enter">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ background: 'var(--brand-50)' }}>
+          <BarChart2 size={28} style={{ color: 'var(--brand-500)' }} />
+        </div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>No budget data yet</h1>
         <p className="text-gray-500 text-sm mb-6">
           Upload financial data to see your budget analysis and category-level breakdown.
         </p>
         <a
           href="/upload"
-          className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-xl"
-          style={{ backgroundColor: '#1e3a5f' }}
+          className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white"
+          style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-display), system-ui, sans-serif', boxShadow: 'var(--shadow-sm)' }}
         >
           Upload data
         </a>
@@ -108,8 +110,8 @@ export default function BudgetAnalysisPage() {
     <div className="max-w-6xl space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Budget Analysis</h1>
-        <p className="text-gray-500 mt-1 text-sm">
+        <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Budget Analysis</h1>
+        <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
           Year-to-date budget performance by category
         </p>
       </div>
@@ -134,7 +136,7 @@ export default function BudgetAnalysisPage() {
       </div>
 
       {/* ── Desktop table (md and up) ── */}
-      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="hidden md:block card-static overflow-hidden">
         {/* Column headers */}
         <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 bg-gray-50 border-b border-gray-200 px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
           <div>Category</div>
@@ -268,7 +270,7 @@ export default function BudgetAnalysisPage() {
           return (
             <div
               key={cat.name}
-              className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden ${cfg.row}`}
+              className={`card-static overflow-hidden ${cfg.row}`}
             >
               {/* Card header — name + badge */}
               <div

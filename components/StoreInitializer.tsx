@@ -27,7 +27,7 @@ export default function StoreInitializer({ userId, schoolId }: Props) {
 
   if (loadError) {
     return (
-      <div className="fixed bottom-4 right-4 z-50 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 shadow-sm max-w-sm">
+      <div className="fixed bottom-4 right-4 z-50 px-4 py-3 text-sm max-w-sm" style={{ background: 'var(--danger-50)', border: '1px solid var(--danger-100)', borderRadius: 'var(--radius-md)', color: 'var(--danger-700)', boxShadow: 'var(--shadow-md)' }}>
         Unable to load your data. Please refresh the page.
       </div>
     )

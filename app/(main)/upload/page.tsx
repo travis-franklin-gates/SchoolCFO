@@ -253,8 +253,8 @@ export default function UploadPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Upload Data</h1>
-          <p className="text-gray-500 mt-1 text-sm">
+          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Upload Data</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
             Import your financial data from CSV or Excel files
           </p>
         </div>
@@ -282,9 +282,10 @@ export default function UploadPage() {
                       done
                         ? 'bg-green-500 text-white'
                         : active
-                        ? 'bg-[#1e3a5f] text-white'
+                        ? 'text-white'
                         : 'bg-gray-200 text-gray-400'
                     }`}
+                    {...(active && !done ? { style: { background: 'var(--brand-700)' } } : {})}
                   >
                     {done ? <CheckCircle size={13} /> : i + 1}
                   </div>
@@ -348,7 +349,7 @@ export default function UploadPage() {
           />
           {parsing ? (
             <div className="flex flex-col items-center gap-3">
-              <div className="w-10 h-10 border-4 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+              <div className="w-10 h-10 border-[3px] rounded-full animate-spin" style={{ borderColor: 'var(--brand-200)', borderTopColor: 'var(--brand-600)' }} />
               <p className="text-sm text-gray-500">Reading file…</p>
             </div>
           ) : (
@@ -358,7 +359,8 @@ export default function UploadPage() {
               <p className="text-sm text-gray-400 mt-1">Accepts CSV and Excel (.xlsx) files</p>
               <button
                 type="button"
-                className="mt-5 px-5 py-2 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] transition-colors"
+                className="mt-5 px-5 py-2 text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', borderRadius: 'var(--radius-sm)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
               >
                 Browse Files
               </button>
@@ -381,7 +383,7 @@ export default function UploadPage() {
 
       {/* ── STEP: PREVIEW ── */}
       {step === 'preview' && (
-        <div className="bg-white rounded-xl border border-gray-200">
+        <div className="card-static">
           {/* File info bar */}
           <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
             <FileSpreadsheet size={18} className="text-gray-400 shrink-0" />
@@ -453,7 +455,8 @@ export default function UploadPage() {
             </button>
             <button
               onClick={handleProceedFromPreview}
-              className="flex items-center gap-1.5 px-5 py-2 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] transition-colors"
+              className="flex items-center gap-1.5 px-5 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+              style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)' }}
             >
               Continue
               <ArrowRight size={14} />
@@ -473,7 +476,7 @@ export default function UploadPage() {
           </div>
 
           {columnMappings.map((m) => (
-            <div key={m.columnIndex} className="bg-white rounded-xl border border-gray-200 p-5">
+            <div key={m.columnIndex} className="card-static p-5">
               <div className="flex items-start gap-4">
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-800 mb-0.5">
@@ -521,7 +524,8 @@ export default function UploadPage() {
             </button>
             <button
               onClick={handleConfirmMapping}
-              className="flex items-center gap-1.5 px-5 py-2 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] transition-colors"
+              className="flex items-center gap-1.5 px-5 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+              style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)' }}
             >
               Confirm Mapping
               <ArrowRight size={14} />
@@ -534,7 +538,7 @@ export default function UploadPage() {
       {step === 'confirmation' && (
         <div className="space-y-5">
           {/* Month selector + summary */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+          <div className="card-static p-5 space-y-4">
             {/* Month selector */}
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1.5">
@@ -593,7 +597,7 @@ export default function UploadPage() {
           </div>
 
           {/* Preview table of mapped data */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="card-static overflow-hidden">
             <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1.2fr] bg-gray-50 border-b border-gray-200 px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
               <div>Category</div>
               <div className="text-right">Budget</div>
@@ -658,7 +662,7 @@ export default function UploadPage() {
 
           {/* Grant preview — only shown when grant columns were detected */}
           {mappedGrants.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="card-static overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
                 <Award size={14} className="text-[#1e3a5f]" />
                 <span className="text-sm font-semibold text-gray-800">
@@ -719,7 +723,8 @@ export default function UploadPage() {
               <button
                 onClick={handleImport}
                 disabled={importing}
-                className="flex items-center gap-2 px-5 py-2 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] disabled:opacity-60 transition-colors"
+                className="flex items-center gap-2 px-5 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-60 transition-opacity"
+                style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)' }}
               >
                 {importing ? (
                   <>
@@ -747,11 +752,11 @@ export default function UploadPage() {
       <div>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Upload History</h2>
         {historyMonths.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 px-5 py-8 text-center">
+          <div className="card-static px-5 py-8 text-center">
             <p className="text-sm text-gray-400">No uploads yet</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+          <div className="card-static divide-y divide-gray-100">
             {historyMonths.map((fm) => {
               const snap = monthlySnapshots[fm.key]!
               return (

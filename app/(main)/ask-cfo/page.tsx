@@ -273,7 +273,7 @@ export default function AskCFOPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Ask Your CFO</h1>
+          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Ask Your CFO</h1>
           <p className="text-gray-500 mt-1 text-sm">
             Ask questions about your school&apos;s finances in plain English
           </p>
@@ -294,10 +294,10 @@ export default function AskCFOPage() {
         {chatMessages.length === 0 ? (
           /* Empty state */
           <div className="flex flex-col items-center justify-center h-full pb-8">
-            <div className="w-14 h-14 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center mb-4">
-              <MessageCircle size={26} className="text-[#1e3a5f]" />
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: 'var(--brand-50)' }}>
+              <MessageCircle size={26} style={{ color: 'var(--brand-500)' }} />
             </div>
-            <h2 className="text-lg font-semibold text-gray-800 mb-1">
+            <h2 className="text-lg font-semibold text-gray-800 mb-1" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
               What would you like to know?
             </h2>
             <p className="text-sm text-gray-400 mb-7 text-center max-w-sm">
@@ -310,7 +310,7 @@ export default function AskCFOPage() {
                 <button
                   key={q}
                   onClick={() => send(q)}
-                  className="text-left px-4 py-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:border-[#1e3a5f] hover:text-[#1e3a5f] transition-colors leading-snug"
+                  className="text-left px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 hover:border-[#1e3a5f] hover:text-[#1e3a5f] transition-all leading-snug hover:shadow-sm"
                 >
                   {q}
                 </button>
@@ -326,16 +326,20 @@ export default function AskCFOPage() {
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {msg.role === 'assistant' && (
-                  <div className="w-7 h-7 rounded-full bg-[#1e3a5f] flex items-center justify-center shrink-0 mr-2.5 mt-0.5">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mr-2.5 mt-0.5" style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--accent-500) 100%)' }}>
                     <MessageCircle size={13} className="text-white" />
                   </div>
                 )}
                 <div
                   className={`rounded-2xl text-sm leading-relaxed ${
                     msg.role === 'user'
-                      ? 'max-w-[85%] px-4 py-3 bg-[#1e3a5f] text-white rounded-br-sm'
+                      ? 'max-w-[85%] px-4 py-3 text-white rounded-br-sm'
                       : 'w-full px-5 py-4 bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
                   }`}
+                  style={msg.role === 'user'
+                    ? { background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)' }
+                    : { borderRadius: 'var(--radius-lg)' }
+                  }
                 >
                   {msg.content === '' && msg.role === 'assistant' ? (
                     <span className="flex gap-1 items-center text-gray-400 py-0.5">
@@ -490,7 +494,8 @@ export default function AskCFOPage() {
           <button
             type="submit"
             disabled={(!input.trim() && !attachedFile) || loading}
-            className="px-4 py-2.5 bg-[#1e3a5f] text-white rounded-lg hover:bg-[#162d4a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2.5 text-white hover:bg-[#162d4a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            style={{ background: 'var(--brand-700)', borderRadius: 'var(--radius-sm)' }}
           >
             <Send size={16} />
           </button>

@@ -12,6 +12,7 @@ import {
   Save,
   AlertTriangle,
   ChevronRight,
+  FileBarChart,
 } from 'lucide-react'
 import { useStore, type PacketStatus, type BoardPacketContent } from '@/lib/store'
 import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, labelFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
@@ -119,7 +120,7 @@ export default function BoardPacketPage() {
   if (!isLoaded && Object.keys(monthlySnapshots).length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-[3px] rounded-full animate-spin" style={{ borderColor: 'var(--brand-200)', borderTopColor: 'var(--brand-600)' }} />
       </div>
     )
   }
@@ -127,15 +128,17 @@ export default function BoardPacketPage() {
   if (isLoaded && Object.keys(monthlySnapshots).length === 0) {
     return (
       <div className="max-w-lg mx-auto mt-16 text-center">
-        <div className="text-4xl mb-4">📄</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">No financial data yet</h1>
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full" style={{ background: 'var(--brand-50)' }}>
+          <FileBarChart size={28} style={{ color: 'var(--brand-400)' }} />
+        </div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>No financial data yet</h1>
         <p className="text-gray-500 text-sm mb-6">
           Upload financial data before generating a board packet.
         </p>
         <a
           href="/upload"
           className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-lg"
-          style={{ backgroundColor: '#1e3a5f' }}
+          style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)' }}
         >
           Upload data
         </a>
@@ -360,7 +363,8 @@ export default function BoardPacketPage() {
         <div className="flex gap-2">
           <button
             onClick={saveEdit}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e3a5f] text-white text-xs font-medium rounded-lg hover:bg-[#162d4a] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-medium rounded-lg transition-colors"
+            style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)' }}
           >
             <Save size={11} /> Save
           </button>
@@ -383,8 +387,8 @@ export default function BoardPacketPage() {
       {/* Page header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Board Packet</h1>
-          <p className="text-gray-500 mt-1 text-sm">
+          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Board Packet</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
             Generate and export monthly board financial reports
           </p>
         </div>
@@ -393,7 +397,8 @@ export default function BoardPacketPage() {
             <button
               onClick={handleExportPDF}
               disabled={exporting || !!editingKey}
-              className="flex items-center gap-2 px-4 py-2 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] disabled:opacity-60 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-60 transition-colors"
+              style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)' }}
             >
               {exporting ? (
                 <>
@@ -412,7 +417,7 @@ export default function BoardPacketPage() {
       </div>
 
       {/* Status bar */}
-      <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between">
+      <div className="card-static px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3 text-sm text-gray-600">
           <Clock size={14} className="text-gray-400" />
           <span>Next board meeting: <span className="font-medium text-gray-800">{fmtDate(schoolProfile.nextBoardMeeting)}</span></span>
@@ -447,7 +452,7 @@ export default function BoardPacketPage() {
 
       {/* Generate card (shown when no content yet) */}
       {!hasContent && activeSnap && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="card-static p-6">
           <h2 className="font-semibold text-gray-800 mb-4">Generate Board Packet for {monthLabel}</h2>
           <div className="bg-gray-50 border border-gray-100 rounded-lg p-4 mb-5">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Packet includes</p>
@@ -479,7 +484,8 @@ export default function BoardPacketPage() {
           ) : (
             <button
               onClick={handleGenerate}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] transition-colors"
+              className="flex items-center gap-2 px-5 py-2.5 text-white text-sm font-medium rounded-lg transition-colors"
+              style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)' }}
             >
               <FileText size={15} />
               Generate Board Packet
@@ -492,7 +498,7 @@ export default function BoardPacketPage() {
       {hasContent && content && (
         <div
           ref={printRef}
-          className="bg-white border border-gray-200 rounded-xl p-8 space-y-2"
+          className="card-static p-8 space-y-2"
         >
           {/* Cover */}
           <div className="text-center pb-6 mb-6 border-b-2 border-[#1e3a5f]">
@@ -861,11 +867,11 @@ export default function BoardPacketPage() {
       <div>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Packet History</h2>
         {sortedPackets.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 px-5 py-8 text-center">
+          <div className="card-static px-5 py-8 text-center">
             <p className="text-sm text-gray-400">No packets generated yet</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+          <div className="card-static divide-y divide-gray-100">
             {sortedPackets.map((packet) => (
               <div key={packet.id} className="flex items-center gap-4 px-5 py-4">
                 <FileText size={17} className="text-gray-400 shrink-0" />

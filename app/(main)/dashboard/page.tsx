@@ -131,23 +131,30 @@ export default function DashboardPage() {
   if (!isLoaded && Object.keys(monthlySnapshots).length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-[3px] rounded-full animate-spin" style={{ borderColor: 'var(--brand-200)', borderTopColor: 'var(--brand-600)' }} />
       </div>
     )
   }
 
   if (isLoaded && Object.keys(monthlySnapshots).length === 0) {
     return (
-      <div className="max-w-lg mx-auto mt-16 text-center">
-        <div className="text-4xl mb-4">📊</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">No financial data yet</h1>
-        <p className="text-gray-500 text-sm mb-6">
+      <div className="max-w-lg mx-auto mt-16 text-center page-enter">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ background: 'var(--brand-50)' }}>
+          <Upload size={28} style={{ color: 'var(--brand-500)' }} />
+        </div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>No financial data yet</h1>
+        <p className="text-sm mb-6" style={{ color: 'var(--text-tertiary)' }}>
           Upload your first budget file to see your Morning Briefing dashboard.
         </p>
         <Link
           href="/upload"
-          className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-xl"
-          style={{ backgroundColor: '#1e3a5f' }}
+          className="inline-flex items-center px-5 py-2.5 text-sm font-semibold text-white"
+          style={{
+            background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)',
+            borderRadius: 'var(--radius-md)',
+            fontFamily: 'var(--font-display), system-ui, sans-serif',
+            boxShadow: 'var(--shadow-sm)',
+          }}
         >
           Upload your first file
         </Link>
@@ -259,16 +266,16 @@ export default function DashboardPage() {
   const briefingAction = arrowIdx >= 0 ? briefing.slice(arrowIdx + 1).trim() : ''
 
   return (
-    <div className="space-y-5 max-w-6xl">
+    <div className="space-y-6 max-w-6xl">
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Morning Briefing</h1>
-            <p className="text-gray-500 mt-0.5 text-sm">{today}</p>
+            <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Morning Briefing</h1>
+            <p className="mt-0.5 text-sm" style={{ color: 'var(--text-tertiary)' }}>{today}</p>
           </div>
-          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${healthScore.color}`}>
+          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${healthScore.color}`} style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
             {healthScore.label}
           </span>
         </div>
@@ -276,7 +283,8 @@ export default function DashboardPage() {
           <select
             value={activeMonth}
             onChange={(e) => setActiveMonth(e.target.value)}
-            className="text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 bg-white"
+            className="text-sm px-3 py-1.5 bg-white"
+            style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)' }}
           >
             {availableMonths.map((fm) => (
               <option key={fm.key} value={fm.key}>{fm.label}</option>
@@ -286,32 +294,40 @@ export default function DashboardPage() {
       </div>
 
       {/* ── AI Morning Briefing ───────────────────────────────────────────── */}
-      <div
-        className="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 p-5"
-        style={{ borderLeftColor: '#1e3a5f' }}
-      >
+      <div className="ai-briefing px-6 py-5">
+        <div className="flex items-center gap-2 mb-3">
+          <div
+            className="w-5 h-5 rounded-md flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--accent-500) 100%)' }}
+          >
+            <span className="text-white text-xs font-bold" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>AI</span>
+          </div>
+          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--brand-500)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+            CFO Briefing
+          </span>
+        </div>
         {briefingLoading ? (
-          <div className="space-y-2.5 animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-full" />
-            <div className="h-4 bg-gray-200 rounded w-11/12" />
-            <div className="h-4 bg-gray-200 rounded w-4/6" />
+          <div className="space-y-2.5">
+            <div className="skeleton h-4 w-full" />
+            <div className="skeleton h-4 w-11/12" />
+            <div className="skeleton h-4 w-4/6" />
           </div>
         ) : briefingError ? (
-          <p className="text-sm text-gray-500 italic">
+          <p className="text-sm italic" style={{ color: 'var(--text-tertiary)' }}>
             AI briefing unavailable — check that your ANTHROPIC_API_KEY is configured. Budget analysis and alerts below reflect the current financial position.
           </p>
         ) : briefing ? (
-          <p className="text-sm text-gray-700 leading-relaxed">
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
             {briefingMain}
             {briefingAction && (
-              <span className="font-semibold text-gray-900"> → {briefingAction}</span>
+              <span className="font-semibold" style={{ color: 'var(--text-primary)' }}> → {briefingAction}</span>
             )}
           </p>
         ) : (
-          <div className="space-y-2.5 animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-full" />
-            <div className="h-4 bg-gray-200 rounded w-11/12" />
-            <div className="h-4 bg-gray-200 rounded w-4/6" />
+          <div className="space-y-2.5">
+            <div className="skeleton h-4 w-full" />
+            <div className="skeleton h-4 w-11/12" />
+            <div className="skeleton h-4 w-4/6" />
           </div>
         )}
       </div>
@@ -320,16 +336,16 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
         {/* Card 1 — Cash Position */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <div className="card-static p-5">
           <div className="flex items-start justify-between mb-3">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Cash Position</p>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Cash Position</p>
             <div className={`w-2.5 h-2.5 rounded-full mt-0.5 ${
               financialData.daysOfReserves >= 60 ? 'bg-green-500' :
               financialData.daysOfReserves >= 30 ? 'bg-yellow-400' : 'bg-red-500'
             }`} />
           </div>
-          <p className="text-3xl font-bold text-gray-900">{fmt(financialData.cashOnHand)}</p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{fmt(financialData.cashOnHand)}</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
             {financialData.daysOfReserves} days of operating reserves
           </p>
           <p className={`text-xs mt-1.5 font-medium ${
@@ -345,13 +361,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Card 2 — Budget Pace */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+        <div className="card-static p-5">
           <div className="flex items-start justify-between mb-3">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Budget Pace</p>
-            <TrendingUp className="text-gray-400" size={16} />
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Budget Pace</p>
+            <TrendingUp size={16} style={{ color: 'var(--text-tertiary)' }} />
           </div>
-          <p className="text-3xl font-bold text-gray-900">{burnPct}%</p>
-          <p className="text-sm text-gray-500 mt-1">of annual budget spent</p>
+          <p className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{burnPct}%</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>of annual budget spent</p>
           <p className={`text-xs mt-1.5 font-medium ${
             Math.abs(paceDelta) <= 2  ? 'text-green-600' :
             paceDelta > 5             ? 'text-red-600'   :
@@ -369,14 +385,14 @@ export default function DashboardPage() {
         {/* Card 3 — Active Alerts (clickable → Budget Analysis) */}
         <Link
           href="/budget-analysis"
-          className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 block hover:shadow-md transition-shadow"
+          className="card p-5 block"
         >
           <div className="flex items-start justify-between mb-3">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Alerts</p>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Active Alerts</p>
             <AlertTriangle className={alerts.length > 0 ? 'text-amber-500' : 'text-gray-300'} size={16} />
           </div>
-          <p className="text-3xl font-bold text-gray-900">{alerts.length}</p>
-          <p className="text-sm text-gray-500 mt-1">items need attention</p>
+          <p className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{alerts.length}</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>items need attention</p>
           {(actionCount > 0 || watchConcernCount > 0) && (
             <p className="text-xs mt-1.5 font-medium">
               {actionCount > 0 && (
@@ -395,14 +411,14 @@ export default function DashboardPage() {
         {/* Card 4 — Next Board Meeting (clickable → Board Packet) */}
         <Link
           href="/board-packet"
-          className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 block hover:shadow-md transition-shadow"
+          className="card p-5 block"
         >
           <div className="flex items-start justify-between mb-3">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Next Board Meeting</p>
-            <Calendar className="text-gray-400" size={16} />
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Next Board Meeting</p>
+            <Calendar size={16} style={{ color: 'var(--text-tertiary)' }} />
           </div>
-          <p className="text-3xl font-bold text-gray-900">{fmtShort(schoolProfile.nextBoardMeeting)}</p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{fmtShort(schoolProfile.nextBoardMeeting)}</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
             {boardMeetingDays != null
               ? boardMeetingDays > 0
                 ? `${boardMeetingDays} days away`
@@ -411,7 +427,7 @@ export default function DashboardPage() {
                 : `${Math.abs(boardMeetingDays)} days ago`
               : fmtDate(schoolProfile.nextBoardMeeting)}
           </p>
-          <p className="text-xs mt-1.5 font-medium text-gray-500">
+          <p className="text-xs mt-1.5 font-medium" style={{ color: 'var(--text-tertiary)' }}>
             Packet:{' '}
             <span className={
               latestPacket?.status === 'finalized' ? 'text-green-600' :
@@ -431,7 +447,7 @@ export default function DashboardPage() {
             return (
               <div
                 key={alert.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 p-4"
+                className="card-static border-l-4 p-4"
                 style={{ borderLeftColor: cfg.borderColor }}
               >
                 <div className="flex items-start gap-3">
@@ -475,22 +491,29 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link
           href="/board-packet"
-          className="flex items-center justify-center gap-2 text-white rounded-xl px-4 py-3 text-sm font-medium hover:opacity-90 transition-opacity"
-          style={{ backgroundColor: '#1e3a5f' }}
+          className="flex items-center justify-center gap-2 text-white px-4 py-3 text-sm font-semibold hover:opacity-90 transition-opacity"
+          style={{
+            background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)',
+            borderRadius: 'var(--radius-md)',
+            fontFamily: 'var(--font-display), system-ui, sans-serif',
+            boxShadow: 'var(--shadow-sm)',
+          }}
         >
           <FileText size={16} />
           Generate Board Packet
         </Link>
         <Link
           href="/ask-cfo"
-          className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 rounded-xl px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+          className="card-static flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold hover:shadow-md transition-shadow"
+          style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
         >
           <MessageSquare size={16} />
           Ask Your CFO
         </Link>
         <Link
           href="/upload"
-          className="flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 rounded-xl px-4 py-3 text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
+          className="card-static flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold hover:shadow-md transition-shadow"
+          style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
         >
           <Upload size={16} />
           Upload New Data
@@ -499,8 +522,8 @@ export default function DashboardPage() {
 
       {/* ── Charts ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Spend Rate</h2>
+        <div className="card-static p-5">
+          <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Spend Rate</h2>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={spendData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
               <defs>
@@ -520,8 +543,8 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Projections</h2>
+        <div className="card-static p-5">
+          <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Projections</h2>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={projectionChartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
               <defs>
@@ -543,8 +566,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Budget vs. Actuals by Category</h2>
+      <div className="card-static p-5">
+        <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Budget vs. Actuals by Category</h2>
         <ResponsiveContainer width="100%" height={260}>
           <BarChart
             data={financialData.categories}

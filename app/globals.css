@@ -1,24 +1,232 @@
 @import "tailwindcss";
 
-html {
-  font-size: 15px;
-  scroll-behavior: smooth;
-}
+/* ── Design Tokens ─────────────────────────────────────────────────────────── */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand */
+  --brand-900: #0f1f33;
+  --brand-800: #162d4b;
+  --brand-700: #1e3a5f;
+  --brand-600: #2a4f7a;
+  --brand-500: #3a6898;
+  --brand-400: #5a8ab8;
+  --brand-300: #8bb0d4;
+  --brand-200: #bdd4ec;
+  --brand-100: #e0ecf7;
+  --brand-50: #f0f5fb;
+
+  /* Accent — warm teal for CTAs, distinguishes from brand navy */
+  --accent-700: #0d6e6e;
+  --accent-600: #0f8585;
+  --accent-500: #14a3a3;
+  --accent-400: #2ec4b6;
+  --accent-300: #6edbd0;
+  --accent-200: #b0ece5;
+  --accent-100: #ddf7f4;
+  --accent-50: #f0fcfa;
+
+  /* Semantic — success */
+  --success-700: #15803d;
+  --success-600: #16a34a;
+  --success-100: #dcfce7;
+  --success-50: #f0fdf4;
+
+  /* Semantic — warning */
+  --warning-700: #a16207;
+  --warning-600: #ca8a04;
+  --warning-100: #fef9c3;
+  --warning-50: #fefce8;
+
+  /* Semantic — danger */
+  --danger-700: #b91c1c;
+  --danger-600: #dc2626;
+  --danger-100: #fee2e2;
+  --danger-50: #fef2f2;
+
+  /* Surfaces */
+  --surface-bg: #f7f8fb;
+  --surface-card: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-subtle: #f1f4f9;
+
+  /* Text */
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-tertiary: #9ca3af;
+  --text-inverse: #ffffff;
+
+  /* Borders */
+  --border-default: #e2e6ee;
+  --border-subtle: #eef1f6;
+  --border-strong: #cbd2de;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(15, 31, 51, 0.04);
+  --shadow-sm: 0 1px 3px rgba(15, 31, 51, 0.06), 0 1px 2px rgba(15, 31, 51, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 31, 51, 0.08), 0 2px 4px rgba(15, 31, 51, 0.04);
+  --shadow-lg: 0 8px 24px rgba(15, 31, 51, 0.1), 0 4px 8px rgba(15, 31, 51, 0.04);
+  --shadow-glow: 0 0 0 3px rgba(30, 58, 95, 0.08);
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* Foreground/background for Tailwind theme */
+  --background: var(--surface-bg);
+  --foreground: var(--text-primary);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+/* ── Base ──────────────────────────────────────────────────────────────────── */
+
+html {
+  font-size: 15px;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, sans-serif;
+  background: var(--surface-bg);
+  color: var(--text-primary);
+  font-family: var(--font-body), system-ui, sans-serif;
   line-height: 1.6;
+}
+
+/* ── Typography ────────────────────────────────────────────────────────────── */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+/* ── Global transitions ────────────────────────────────────────────────────── */
+
+a, button, input, select, textarea {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Card refinements (applied globally via utility) ──────────────────────── */
+
+.card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.card-static {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Premium AI briefing card ─────────────────────────────────────────────── */
+
+.ai-briefing {
+  position: relative;
+  background: linear-gradient(135deg, var(--brand-50) 0%, #ffffff 50%, var(--accent-50) 100%);
+  border: 1px solid var(--brand-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+}
+
+.ai-briefing::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand-700) 0%, var(--brand-500) 40%, var(--accent-400) 100%);
+}
+
+/* ── Skeleton pulse for loading states ─────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-subtle) 25%, #e8ecf3 37%, var(--surface-subtle) 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* ── Page transition fade ──────────────────────────────────────────────────── */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: fadeInUp 300ms ease-out;
+}
+
+/* ── Focus ring ────────────────────────────────────────────────────────────── */
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12);
+}
+
+/* ── Scrollbar refinement ──────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* ── Badge refinements ─────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-display), system-ui, sans-serif;
+  letter-spacing: 0.01em;
 }

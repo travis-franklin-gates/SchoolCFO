@@ -47,25 +47,62 @@ export default function OnboardingPage() {
     router.refresh()
   }
 
+  const inputCls = 'w-full px-3.5 py-2.5 text-sm bg-white'
+  const inputStyle = { border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)' }
+
   return (
     <div className="w-full max-w-lg">
       {/* Branding */}
       <div className="text-center mb-8">
-        <div className="text-3xl font-bold tracking-tight" style={{ color: '#1e3a5f' }}>
-          SchoolCFO
+        <div className="flex items-center justify-center gap-2.5 mb-2">
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-extrabold text-white"
+            style={{
+              background: 'linear-gradient(135deg, #2ec4b6 0%, #14a3a3 100%)',
+              fontFamily: 'var(--font-display), system-ui, sans-serif',
+              boxShadow: '0 2px 8px rgba(46, 196, 182, 0.3)',
+            }}
+          >
+            S
+          </div>
+          <div
+            className="text-2xl tracking-tight"
+            style={{
+              color: 'var(--brand-700)',
+              fontFamily: 'var(--font-display), system-ui, sans-serif',
+              fontWeight: 700,
+            }}
+          >
+            School<span style={{ color: 'var(--accent-500)' }}>CFO</span>
+          </div>
         </div>
-        <p className="text-gray-500 text-sm mt-1">Let&apos;s set up your school profile</p>
+        <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+          Let&apos;s set up your school profile
+        </p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
-        <h1 className="text-lg font-semibold text-gray-900 mb-2">Tell us about your school</h1>
-        <p className="text-sm text-gray-500 mb-6">
+      <div
+        className="p-8"
+        style={{
+          background: 'var(--surface-card)',
+          borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--border-default)',
+          boxShadow: 'var(--shadow-lg)',
+        }}
+      >
+        <h1
+          className="text-lg text-gray-900 mb-2"
+          style={{ fontFamily: 'var(--font-display), system-ui, sans-serif', fontWeight: 700 }}
+        >
+          Tell us about your school
+        </h1>
+        <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
           This information helps us tailor your financial dashboards and reports.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
               School name <span className="text-red-500">*</span>
             </label>
             <input
@@ -73,31 +110,34 @@ export default function OnboardingPage() {
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
+              className={inputCls}
+              style={inputStyle}
               placeholder="e.g. Cascade Charter Elementary"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
               Authorizer
             </label>
             <input
               type="text"
               value={authorizer}
               onChange={(e) => setAuthorizer(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
+              className={inputCls}
+              style={inputStyle}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
               Grade configuration
             </label>
             <select
               value={gradeConfig}
               onChange={(e) => setGradeConfig(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f] bg-white"
+              className={inputCls}
+              style={inputStyle}
             >
               {GRADE_OPTIONS.map((g) => (
                 <option key={g} value={g}>{g}</option>
@@ -106,7 +146,7 @@ export default function OnboardingPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
               Current FTES (full-time equivalent students)
             </label>
             <input
@@ -115,25 +155,35 @@ export default function OnboardingPage() {
               step="0.5"
               value={currentFtes}
               onChange={(e) => setCurrentFtes(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
+              className={inputCls}
+              style={inputStyle}
               placeholder="e.g. 187"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
               Next board meeting date
             </label>
             <input
               type="date"
               value={nextBoardMeeting}
               onChange={(e) => setNextBoardMeeting(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
+              className={inputCls}
+              style={inputStyle}
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p
+              className="text-sm px-3.5 py-2.5"
+              style={{
+                color: 'var(--danger-700)',
+                background: 'var(--danger-50)',
+                border: '1px solid var(--danger-100)',
+                borderRadius: 'var(--radius-sm)',
+              }}
+            >
               {error}
             </p>
           )}
@@ -141,8 +191,13 @@ export default function OnboardingPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 text-sm font-medium text-white rounded-lg disabled:opacity-60 transition-colors"
-            style={{ backgroundColor: '#1e3a5f' }}
+            className="w-full py-2.5 px-4 text-sm font-semibold text-white disabled:opacity-60"
+            style={{
+              background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)',
+              borderRadius: 'var(--radius-sm)',
+              fontFamily: 'var(--font-display), system-ui, sans-serif',
+              boxShadow: 'var(--shadow-sm)',
+            }}
           >
             {loading ? 'Setting up your school…' : 'Continue to upload data'}
           </button>

@@ -40,24 +40,24 @@ export default function GrantTrackerPage() {
   if (!isLoaded) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-[3px] rounded-full animate-spin" style={{ borderColor: 'var(--brand-200)', borderTopColor: 'var(--brand-600)' }} />
       </div>
     )
   }
 
   if (isLoaded && Object.keys(monthlySnapshots).length === 0 && grants.length === 0) {
     return (
-      <div className="max-w-lg mx-auto mt-16 text-center">
-        <div className="text-4xl mb-4">🏆</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">No grant data yet</h1>
+      <div className="max-w-lg mx-auto mt-16 text-center page-enter">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ background: 'var(--brand-50)' }}><span style={{ fontSize: '28px' }}>🏆</span></div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>No grant data yet</h1>
         <p className="text-gray-500 text-sm mb-6">
           Upload financial data or add grants in Settings to see your grant tracker.
         </p>
         <div className="flex gap-3 justify-center">
           <a
             href="/upload"
-            className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white rounded-lg"
-            style={{ backgroundColor: '#1e3a5f' }}
+            className="inline-flex items-center px-5 py-2.5 text-sm font-medium text-white"
+            style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
           >
             Upload data
           </a>
@@ -86,7 +86,7 @@ export default function GrantTrackerPage() {
     <div className="max-w-4xl space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Grant Tracker</h1>
+        <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Grant Tracker</h1>
         <p className="text-gray-500 mt-1 text-sm">
           Categorical and discretionary grant status
         </p>
@@ -94,12 +94,12 @@ export default function GrantTrackerPage() {
 
       {/* ── WA Categorical Grants ── */}
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
           WA Categorical Grants
         </h2>
 
         {/* Summary bar */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 flex items-center justify-between">
+        <div className="card-static px-5 py-4 flex items-center justify-between">
           <div className="flex gap-8">
             <div>
               <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Total Awards</p>
@@ -130,8 +130,8 @@ export default function GrantTrackerPage() {
             return (
               <div
                 key={grant.id}
-                className={`bg-white rounded-xl shadow-sm border p-5 ${
-                  grant.status === 'underspend-risk' ? 'border-orange-200' : 'border-gray-200'
+                className={`card-static p-5 ${
+                  grant.status === 'underspend-risk' ? 'border-orange-200' : ''
                 }`}
               >
                 <div className="flex items-start justify-between mb-4">
@@ -200,7 +200,7 @@ export default function GrantTrackerPage() {
 
       {/* ── Other Grants & Philanthropic Funding ── */}
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
           Other Grants &amp; Philanthropic Funding
         </h2>
 
@@ -216,7 +216,7 @@ export default function GrantTrackerPage() {
         ) : (
           <>
             {/* Summary bar */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 flex items-center justify-between">
+            <div className="card-static px-5 py-4 flex items-center justify-between">
               <div className="flex gap-8">
                 <div>
                   <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Total Awards</p>
@@ -259,8 +259,8 @@ export default function GrantTrackerPage() {
                 return (
                   <div
                     key={grant.id}
-                    className={`bg-white rounded-xl shadow-sm border p-5 ${
-                      isLow ? 'border-amber-200' : 'border-gray-200'
+                    className={`card-static p-5 ${
+                      isLow ? 'border-amber-200' : ''
                     }`}
                   >
                     <div className="flex items-start justify-between mb-1">

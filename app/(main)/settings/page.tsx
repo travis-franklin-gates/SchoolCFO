@@ -35,7 +35,7 @@ const BLANK_OTHER_GRANT = {
 type OtherGrantFormState = typeof BLANK_OTHER_GRANT
 
 const inputCls =
-  'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]'
+  'w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/12 focus:border-[#1e3a5f] bg-white'
 const labelCls = 'block text-xs font-medium text-gray-500 mb-1.5'
 
 // ── Shared form for adding or editing an Other Grant ─────────────────────────
@@ -150,7 +150,8 @@ function OtherGrantFormFields({
       <div className="flex gap-2 pt-1">
         <button
           type="submit"
-          className="px-4 py-2 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] transition-colors"
+          className="px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
+          style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
         >
           {submitLabel}
         </button>
@@ -325,15 +326,15 @@ export default function SettingsPage() {
     <div className="max-w-2xl space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-500 mt-1 text-sm">
+        <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Settings</h1>
+        <p className="text-gray-500 mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
           Manage your school profile and preferences
         </p>
       </div>
 
       {/* ── School Profile ── */}
-      <form onSubmit={saveProfile} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-5">School Profile</h2>
+      <form onSubmit={saveProfile} className="card-static p-6">
+        <h2 className="text-base font-semibold text-gray-800 mb-5" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>School Profile</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
             <label className={labelCls}>School Name</label>
@@ -384,7 +385,7 @@ export default function SettingsPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 mt-5">
-          <button type="submit" className="px-5 py-2 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] transition-colors">
+          <button type="submit" className="px-5 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors" style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
             Save Changes
           </button>
           {profileSaved && (
@@ -396,8 +397,8 @@ export default function SettingsPage() {
       </form>
 
       {/* ── Important Dates ── */}
-      <form onSubmit={saveDates} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-5">Important Dates</h2>
+      <form onSubmit={saveDates} className="card-static p-6">
+        <h2 className="text-base font-semibold text-gray-800 mb-5" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Important Dates</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Next Board Meeting</label>
@@ -419,7 +420,7 @@ export default function SettingsPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 mt-5">
-          <button type="submit" className="px-5 py-2 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] transition-colors">
+          <button type="submit" className="px-5 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors" style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
             Update Dates
           </button>
           {datesSaved && (
@@ -431,10 +432,10 @@ export default function SettingsPage() {
       </form>
 
       {/* ── Categorical Grants ── */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="card-static p-6">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-base font-semibold text-gray-800">Categorical Grants</h2>
+            <h2 className="text-base font-semibold text-gray-800" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Categorical Grants</h2>
             <p className="text-xs text-gray-400 mt-0.5">WA state and federal categorical funding</p>
           </div>
           <button
@@ -467,7 +468,7 @@ export default function SettingsPage() {
               className="w-36 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
               required
             />
-            <button type="submit" className="px-4 py-1.5 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] transition-colors">
+            <button type="submit" className="px-4 py-1.5 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors" style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
               Add
             </button>
             <button type="button" onClick={() => setShowGrantForm(false)} className="px-3 py-1.5 text-gray-500 text-sm hover:text-gray-700 transition-colors">
@@ -502,7 +503,8 @@ export default function SettingsPage() {
                   />
                   <button
                     type="submit"
-                    className="px-3 py-1.5 bg-[#1e3a5f] text-white text-sm font-medium rounded-lg hover:bg-[#162d4a] transition-colors"
+                    className="px-3 py-1.5 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
+                    style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
                   >
                     Save
                   </button>
@@ -546,10 +548,10 @@ export default function SettingsPage() {
       </div>
 
       {/* ── Other Grants & Philanthropic Funding ── */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="card-static p-6">
         <div className="flex items-center justify-between mb-1">
           <div>
-            <h2 className="text-base font-semibold text-gray-800">Other Grants &amp; Philanthropic Funding</h2>
+            <h2 className="text-base font-semibold text-gray-800" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Other Grants &amp; Philanthropic Funding</h2>
             <p className="text-xs text-gray-400 mt-0.5">Federal discretionary grants, foundations, and multi-year awards</p>
           </div>
           {!showOtherForm && (

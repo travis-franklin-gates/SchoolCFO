@@ -18,10 +18,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   if (!school) redirect('/onboarding')
 
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: '#f8f9fa' }}>
+    <div className="flex min-h-screen" style={{ backgroundColor: 'var(--surface-bg)' }}>
       <StoreInitializer userId={user.id} schoolId={school.id} />
       <Sidebar />
-      <main className="ml-0 lg:ml-64 flex-1 px-4 pt-16 pb-6 lg:px-8 lg:py-8 min-w-0">{children}</main>
+      <main className="ml-0 lg:ml-64 flex-1 px-4 pt-16 pb-6 lg:px-10 lg:py-8 min-w-0 page-enter">{children}</main>
     </div>
   )
 }

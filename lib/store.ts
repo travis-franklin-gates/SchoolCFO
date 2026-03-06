@@ -191,6 +191,7 @@ interface AppState {
   removeSchoolContextEntry: (id: string) => void
   updateAuditChecklist: (category: string, checkedItems: string[], reviewerNote?: string) => void
   markAuditReviewed: (category: string) => void
+  deleteSnapshot: (monthKey: string) => void
   setAgentFindings: (findings: AgentFinding[]) => void
   setLastAgentRunAt: (ts: string) => void
 }
@@ -694,6 +695,48 @@ export const useStore = create<AppState>((set, get) => ({
       grants: snap.grants,
       alerts: snap.alerts,
     })
+  },
+
+  deleteSnapshot: (monthKey) => {
+    const { monthlySnapshots, activeMonth, schoolId } = get()
+    const updated = { ...monthlySnapshots }
+    delete updated[monthKey]
+
+    // If deleting the active month, switch to the most recent remaining month
+    const remainingKeys = Object.keys(updated)
+    const newActive = monthKey === activeMonth && remainingKeys.length > 0
+      ? remainingKeys.sort().reverse()[0]
+      : activeMonth
+
+    const newSnap = updated[newActive]
+    const newState: Partial<AppState> = { monthlySnapshots: updated, activeMonth: newActive }
+
+    if (newSnap) {
+      newState.financialData = {
+        totalBudget: newSnap.financialSummary.totalBudget,
+        ytdSpending: newSnap.financialSummary.totalActuals,
+        cashOnHand: newSnap.financialSummary.cashOnHand,
+        daysOfReserves: newSnap.financialSummary.daysOfReserves,
+        variancePercent: newSnap.financialSummary.variancePercent,
+        categories: newSnap.budgetCategories,
+        monthlySpend: newSnap.monthlySpend,
+      }
+      newState.grants = newSnap.grants
+      newState.alerts = newSnap.alerts
+    }
+
+    set(newState)
+
+    if (schoolId) {
+      writeThrough(async (supabase) => {
+        const { error } = await supabase
+          .from('monthly_snapshots')
+          .delete()
+          .eq('school_id', schoolId)
+          .eq('month_key', monthKey)
+        if (error) console.error('[store] deleteSnapshot', error)
+      })
+    }
   },
 
   // ── Chat ──

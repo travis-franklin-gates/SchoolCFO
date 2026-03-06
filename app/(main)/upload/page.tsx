@@ -15,6 +15,7 @@ import {
   Download,
   RotateCcw,
   Award,
+  Trash2,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { getFiscalMonths, currentMonthKey, paceFromKey, labelFromKey } from '@/lib/fiscalYear'
@@ -86,12 +87,13 @@ function deriveAlertStatus(budget: number, ytdActuals: number, expectedPct: numb
 const FISCAL_MONTHS = getFiscalMonths()
 
 export default function UploadPage() {
-  const { monthlySnapshots, importFinancialData } = useStore()
+  const { monthlySnapshots, importFinancialData, deleteSnapshot } = useStore()
   const router = useRouter()
 
   const [step, setStep] = useState<Step>('drop')
   const [parsing, setParsing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [importing, setImporting] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey())
@@ -810,6 +812,7 @@ export default function UploadPage() {
           <div className="card-static divide-y divide-gray-100">
             {historyMonths.map((fm) => {
               const snap = monthlySnapshots[fm.key]!
+              const isConfirming = confirmDelete === fm.key
               return (
                 <div key={fm.key} className="flex items-center gap-4 px-5 py-4">
                   <FileSpreadsheet size={18} className="text-gray-400 shrink-0" />
@@ -830,6 +833,33 @@ export default function UploadPage() {
                     <RotateCcw size={13} />
                     Re-upload
                   </button>
+                  {isConfirming ? (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => {
+                          deleteSnapshot(fm.key)
+                          setConfirmDelete(null)
+                        }}
+                        className="text-xs font-medium text-white bg-red-600 hover:bg-red-700 px-3 py-1 rounded-md transition-colors"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(null)}
+                        className="text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(fm.key)}
+                      className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 size={13} />
+                      Delete
+                    </button>
+                  )}
                 </div>
               )
             })}

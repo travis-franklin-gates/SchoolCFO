@@ -254,20 +254,29 @@ export default function DashboardPage() {
     })
   }
 
-  // Projections chart
+  // Projections chart — based on active month snapshot only
   const projTotalBudget = financialData.totalBudget
-  const snapshotsByFiscalIndex = Object.values(monthlySnapshots).sort(
-    (a, b) => fiscalIndexFromKey(a.month) - fiscalIndexFromKey(b.month)
-  )
-  const lastSnap = snapshotsByFiscalIndex[snapshotsByFiscalIndex.length - 1]
-  const lastFiscalIdx = lastSnap ? fiscalIndexFromKey(lastSnap.month) : 0
+  const activeFiscalIdx = fiscalIndexFromKey(activeMonth)
+  const activeYtd = financialData.ytdSpending
+  const monthlyRunRate = activeFiscalIdx > 0 ? activeYtd / activeFiscalIdx : 0
+
+  // Build cumulative actual spend from monthlySpend data (or distribute via OSPI weights)
+  const cumulativeActuals: Record<number, number> = {}
+  if (spendData.length > 0) {
+    let running = 0
+    const fiscalMonths = getFiscalMonths()
+    for (let i = 0; i < Math.min(spendData.length, activeFiscalIdx); i++) {
+      running += spendData[i].amount
+      cumulativeActuals[fiscalMonths[i].fiscalIndex] = running
+    }
+  }
+
   const projectionChartData = getFiscalMonths().map((fm) => {
-    const snap = monthlySnapshots[fm.key]
     const cumulativeBudget = Math.round((projTotalBudget * fm.fiscalIndex) / 12)
-    const actual = snap ? snap.financialSummary.totalActuals : null
+    const actual = fm.fiscalIndex <= activeFiscalIdx ? (cumulativeActuals[fm.fiscalIndex] ?? null) : null
     let projected: number | null = null
-    if (lastSnap && lastFiscalIdx > 0 && fm.fiscalIndex >= lastFiscalIdx) {
-      projected = Math.round((lastSnap.financialSummary.totalActuals / lastFiscalIdx) * fm.fiscalIndex)
+    if (activeFiscalIdx > 0 && fm.fiscalIndex >= activeFiscalIdx) {
+      projected = Math.round(monthlyRunRate * fm.fiscalIndex)
     }
     return { month: fm.shortLabel, budget: cumulativeBudget, actual, projected }
   })
@@ -629,20 +638,30 @@ export default function DashboardPage() {
       </div>
 
       <div className="card-static p-5">
-        <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Budget vs. Actuals by Category</h2>
-        <ResponsiveContainer width="100%" height={260}>
+        <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Budget vs. Actuals — Top Categories</h2>
+        <ResponsiveContainer width="100%" height={Math.max(200, Math.min(financialData.categories.length, 8) * 40 + 40)}>
           <BarChart
-            data={financialData.categories}
+            data={[...financialData.categories].sort((a, b) => b.budget - a.budget).slice(0, 8)}
             layout="vertical"
             margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
+            barCategoryGap="20%"
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
-            <XAxis type="number" tickFormatter={(v) => `$${v / 1000}K`} tick={{ fontSize: 11 }} />
-            <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={95} />
-            <Tooltip formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')} />
+            <XAxis type="number" tickFormatter={(v) => fmt(Number(v))} tick={{ fontSize: 11 }} />
+            <YAxis
+              type="category"
+              dataKey="name"
+              tick={{ fontSize: 11 }}
+              width={120}
+              tickFormatter={(v: string) => v.length > 16 ? v.slice(0, 15) + '…' : v}
+            />
+            <Tooltip
+              formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')}
+              labelStyle={{ fontWeight: 600, fontSize: 12 }}
+            />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="budget" fill="#e2e8f0" name="Budget" radius={[0, 2, 2, 0]} />
-            <Bar dataKey="ytdActuals" fill="#1e3a5f" name="YTD Actuals" radius={[0, 2, 2, 0]} />
+            <Bar dataKey="budget" fill="#e2e8f0" name="Budget" radius={[0, 3, 3, 0]} barSize={14} />
+            <Bar dataKey="ytdActuals" fill="#1e3a5f" name="YTD Actuals" radius={[0, 3, 3, 0]} barSize={14} />
           </BarChart>
         </ResponsiveContainer>
       </div>

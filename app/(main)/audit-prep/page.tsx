@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import {
   ClipboardCheck,
   FileCheck,
@@ -20,10 +20,44 @@ import {
   Landmark,
   Package,
   ExternalLink,
+  Bot,
+  XCircle,
+  CircleDot,
+  RefreshCw,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { labelFromKey } from '@/lib/fiscalYear'
 import { getChecklistItemDetail } from '@/lib/auditChecklistDetails'
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+type ItemStatus = 'verified' | 'warning' | 'action' | 'manual'
+
+interface ComplianceItem {
+  item: string
+  category: string
+  status: ItemStatus
+  reason: string
+}
+
+interface DocGap {
+  item: string
+  category: string
+  documentName: string
+  mustContain: string
+  prepTimeEstimate: string
+  templateAvailable: boolean
+  templateNote: string
+}
+
+interface ReadinessAssessment {
+  score: number
+  grade: string
+  priorityActions: { action: string; timeEstimate: string; category: string }[]
+  executiveSummary: string
+  categoryStatus: { category: string; label: string; status: string; itemCount: number; verifiedCount: number; gapCount: number }[]
+  estimatedTimeToReady: string
+}
 
 // ── SAO Charter School Audit Categories ──────────────────────────────────────
 
@@ -142,65 +176,79 @@ const AUDIT_CATEGORIES: AuditCategory[] = [
   },
 ]
 
-// ── Status helpers ───────────────────────────────────────────────────────────
+// ── Status icon component ─────────────────────────────────────────────────────
 
-type ReadinessStatus = 'ready' | 'needs-attention' | 'at-risk' | 'not-reviewed'
-
-function getReadinessStatus(
-  checkedCount: number,
-  totalCount: number,
-  reviewedAt: string | null,
-): ReadinessStatus {
-  if (!reviewedAt && checkedCount === 0) return 'not-reviewed'
-  const pct = checkedCount / totalCount
-  if (pct >= 0.8) return 'ready'
-  if (pct >= 0.5) return 'needs-attention'
-  return 'at-risk'
+const STATUS_ICON: Record<ItemStatus, { icon: typeof CheckCircle; cls: string; label: string; bg: string }> = {
+  verified: { icon: CheckCircle, cls: 'text-green-600', label: 'Verified', bg: 'bg-green-50' },
+  warning: { icon: AlertTriangle, cls: 'text-yellow-600', label: 'Needs Review', bg: 'bg-yellow-50' },
+  action: { icon: XCircle, cls: 'text-red-600', label: 'Action Required', bg: 'bg-red-50' },
+  manual: { icon: CircleDot, cls: 'text-gray-400', label: 'Manual Review', bg: 'bg-gray-50' },
 }
 
-const STATUS_CFG: Record<ReadinessStatus, { label: string; cls: string }> = {
-  ready: { label: 'Ready', cls: 'bg-green-100 text-green-800' },
-  'needs-attention': { label: 'Needs Attention', cls: 'bg-yellow-100 text-yellow-800' },
-  'at-risk': { label: 'At Risk', cls: 'bg-red-100 text-red-800' },
-  'not-reviewed': { label: 'Not Reviewed', cls: 'bg-gray-100 text-gray-600' },
-}
-
-// ── Report types ─────────────────────────────────────────────────────────────
-
-interface AuditReport {
-  executiveSummary: string
-  categoryFindings: {
-    category: string
-    status: string
-    findings: string
-    recommendations: string[]
-  }[]
-  priorityActions: string[]
-  timelineRecommendation: string
+function StatusBadge({ status }: { status: ItemStatus }) {
+  const cfg = STATUS_ICON[status]
+  const Icon = cfg.icon
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.cls}`}>
+      <Icon size={11} />
+      {cfg.label}
+    </span>
+  )
 }
 
 // ── Detail panel component ───────────────────────────────────────────────────
 
-function ItemDetailPanel({ itemText }: { itemText: string }) {
+function ItemDetailPanel({
+  itemText,
+  complianceItem,
+  docGap,
+}: {
+  itemText: string
+  complianceItem?: ComplianceItem
+  docGap?: DocGap
+}) {
   const detail = getChecklistItemDetail(itemText)
   if (!detail) return null
 
   return (
     <div className="bg-blue-50/60 border-l-4 border-l-blue-400 rounded-r-lg ml-7 mb-1 overflow-hidden animate-[slideDown_200ms_ease-out]">
       <div className="p-4 space-y-4">
+        {/* Agent Finding */}
+        {complianceItem && complianceItem.status !== 'manual' && (
+          <div className={`p-3 rounded-lg border ${
+            complianceItem.status === 'verified' ? 'bg-green-50/80 border-green-200' :
+            complianceItem.status === 'warning' ? 'bg-yellow-50/80 border-yellow-200' :
+            'bg-red-50/80 border-red-200'
+          }`}>
+            <div className="flex items-center gap-2 mb-1">
+              <Bot size={12} className={STATUS_ICON[complianceItem.status].cls} />
+              <h5 className={`text-xs font-semibold uppercase tracking-wide ${STATUS_ICON[complianceItem.status].cls}`}>
+                Agent Finding
+              </h5>
+            </div>
+            <p className="text-sm leading-relaxed text-gray-800">{complianceItem.reason}</p>
+            {docGap && (
+              <div className="mt-2 pt-2 border-t border-gray-200/50 space-y-1">
+                <p className="text-xs"><span className="font-semibold text-gray-700">SAO will request:</span> {docGap.documentName}</p>
+                <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">Must contain:</span> {docGap.mustContain}</p>
+                <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">Prep time:</span> {docGap.prepTimeEstimate}</p>
+                {docGap.templateAvailable && (
+                  <p className="text-xs text-blue-700">{docGap.templateNote}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Why It Matters */}
         <div>
-          <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">
-            Why It Matters
-          </h5>
+          <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">Why It Matters</h5>
           <p className="text-sm text-blue-900 leading-relaxed">{detail.whyItMatters}</p>
         </div>
 
         {/* How to Comply */}
         <div>
-          <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">
-            How to Comply
-          </h5>
+          <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">How to Comply</h5>
           <ol className="list-decimal list-inside space-y-1">
             {detail.howToComply.map((step, i) => (
               <li key={i} className="text-sm text-blue-900 leading-relaxed">{step}</li>
@@ -210,9 +258,7 @@ function ItemDetailPanel({ itemText }: { itemText: string }) {
 
         {/* What to Have Ready */}
         <div>
-          <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">
-            What to Have Ready
-          </h5>
+          <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">What to Have Ready</h5>
           <ul className="space-y-1">
             {detail.whatToHaveReady.map((doc, i) => (
               <li key={i} className="text-sm text-blue-900 leading-relaxed flex items-start gap-2">
@@ -226,9 +272,7 @@ function ItemDetailPanel({ itemText }: { itemText: string }) {
         {/* Resources */}
         {detail.resources.length > 0 && (
           <div>
-            <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">
-              Resources
-            </h5>
+            <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">Resources</h5>
             <div className="flex flex-wrap gap-2">
               {detail.resources.map((res, i) => (
                 <a
@@ -258,67 +302,189 @@ export default function AuditPrepPage() {
     schoolProfile,
     financialData,
     grants,
-    alerts,
     activeMonth,
     auditChecklists,
-    schoolContextEntries,
     updateAuditChecklist,
     markAuditReviewed,
+    schoolId,
+    auditAgentsLastRun,
+    setAuditMeta,
+    setAgentFindings,
+    agentFindings,
   } = useStore()
 
   const printRef = useRef<HTMLDivElement>(null)
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
-  const [report, setReport] = useState<AuditReport | null>(null)
-  const [generating, setGenerating] = useState(false)
-  const [genError, setGenError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+
+  // Agent state
+  const [agentPhase, setAgentPhase] = useState<'idle' | 'compliance' | 'federal' | 'docs' | 'coordinator' | 'done'>('idle')
+  const [complianceItems, setComplianceItems] = useState<ComplianceItem[]>([])
+  const [docGaps, setDocGaps] = useState<DocGap[]>([])
+  const [assessment, setAssessment] = useState<ReadinessAssessment | null>(null)
+  const [agentError, setAgentError] = useState<string | null>(null)
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
+  const hasTriggered = useRef(false)
 
   const monthLabel = labelFromKey(activeMonth)
   const hasData = financialData.categories.length > 0
+  const isRunning = agentPhase !== 'idle' && agentPhase !== 'done'
 
-  // ── Loading / empty states ─────────────────────────────────────────────────
+  // ── Run audit agents ─────────────────────────────────────────────────────
 
-  if (!isLoaded) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-gray-400" size={28} />
-      </div>
-    )
-  }
+  const runAuditAgents = useCallback(async () => {
+    if (!schoolId || !hasData) return
+    setAgentError(null)
 
-  if (!hasData) {
-    return (
-      <div className="max-w-2xl mx-auto text-center py-16 space-y-4">
-        <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg, var(--brand-100) 0%, var(--brand-50) 100%)' }}>
-          <ClipboardCheck size={24} style={{ color: 'var(--brand-600)' }} />
-        </div>
-        <h2 className="text-xl font-semibold text-gray-800"
-          style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
-          Audit Prep
-        </h2>
-        <p className="text-gray-500 text-sm max-w-md mx-auto">
-          Upload your financial data first, then come back here to review audit readiness and generate reports.
-        </p>
-        <a href="/upload"
-          className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
-          style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
-          <Upload size={16} /> Upload Data
-        </a>
-      </div>
-    )
-  }
+    try {
+      // Phase 1: Compliance verification
+      setAgentPhase('compliance')
+      const compRes = await fetch('/api/agents/audit-compliance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schoolId, activeMonth }),
+      })
+      if (!compRes.ok) throw new Error('Compliance verification failed')
+      const { items }: { items: ComplianceItem[] } = await compRes.json()
+      setComplianceItems(items)
 
-  // ── Checklist helpers ──────────────────────────────────────────────────────
+      // Phase 2: Federal programs (parallel with docs)
+      setAgentPhase('federal')
+      const [fedRes] = await Promise.all([
+        fetch('/api/agents/audit-federal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schoolId,
+            activeMonth,
+            grants,
+            totalBudget: financialData.totalBudget,
+            ytdSpending: financialData.ytdSpending,
+          }),
+        }),
+      ])
+
+      const fedData = fedRes.ok ? await fedRes.json() : { findings: 0 }
+
+      // Phase 3: Documentation gap analysis (for flagged items)
+      setAgentPhase('docs')
+      const gaps = items.filter((i) => i.status === 'warning' || i.status === 'action')
+      let parsedDocGaps: DocGap[] = []
+      if (gaps.length > 0) {
+        const docsRes = await fetch('/api/agents/audit-docs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gaps }),
+        })
+        if (docsRes.ok) {
+          const docsData = await docsRes.json()
+          parsedDocGaps = docsData.docGaps ?? []
+        }
+      }
+      setDocGaps(parsedDocGaps)
+
+      // Phase 4: Coordinator synthesis
+      setAgentPhase('coordinator')
+
+      // Reload agent findings to get federal findings
+      const fedFindings = agentFindings
+        .filter((f) => f.agentName === 'audit_federal')
+        .map((f) => ({ severity: f.severity, title: f.title, summary: f.summary }))
+
+      // Also include any freshly written federal findings
+      if (fedData.findings > 0 && fedFindings.length === 0) {
+        // Fetch fresh from server since store may not have updated yet
+        // Use the items we already have
+      }
+
+      const coordRes = await fetch('/api/agents/audit-coordinator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schoolName: schoolProfile.name,
+          complianceItems: items,
+          docGaps: parsedDocGaps,
+          federalFindings: fedFindings,
+        }),
+      })
+
+      if (coordRes.ok) {
+        const readiness: ReadinessAssessment = await coordRes.json()
+        setAssessment(readiness)
+
+        // Save audit meta
+        const now = new Date().toISOString()
+        setAuditMeta({ lastRun: now, score: readiness.score, grade: readiness.grade })
+
+        // Refresh agent findings in store
+        const { data: freshFindings } = await (await import('@/lib/supabase')).supabase
+          .from('agent_findings')
+          .select('*')
+          .eq('school_id', schoolId)
+          .in('agent_name', ['audit_compliance', 'audit_federal'])
+          .order('created_at', { ascending: false })
+
+        if (freshFindings) {
+          // Merge with existing non-audit findings
+          const nonAuditFindings = agentFindings.filter(
+            (f) => f.agentName !== 'audit_compliance' && f.agentName !== 'audit_federal'
+          )
+          setAgentFindings([
+            ...nonAuditFindings,
+            ...freshFindings.map((r: Record<string, unknown>) => ({
+              id: r.id as string,
+              agentName: r.agent_name as ComplianceItem['status'],
+              findingType: r.finding_type as string,
+              severity: r.severity as string,
+              title: r.title as string,
+              summary: r.summary as string,
+              detail: (r.detail as Record<string, unknown>) ?? {},
+              expiresAt: (r.expires_at as string) ?? null,
+              createdAt: r.created_at as string,
+            })),
+          ] as typeof agentFindings)
+        }
+      }
+
+      setAgentPhase('done')
+    } catch (err) {
+      console.error('[audit-agents]', err)
+      setAgentError(err instanceof Error ? err.message : 'Audit agent analysis failed')
+      setAgentPhase('done')
+    }
+  }, [schoolId, hasData, activeMonth, grants, financialData, schoolProfile.name, agentFindings, setAuditMeta, setAgentFindings])
+
+  // Auto-trigger on page load
+  useEffect(() => {
+    if (hasTriggered.current || !isLoaded || !hasData || !schoolId) return
+
+    const shouldRun = !auditAgentsLastRun ||
+      (Date.now() - new Date(auditAgentsLastRun).getTime()) > 7 * 86_400_000
+
+    if (shouldRun) {
+      hasTriggered.current = true
+      runAuditAgents()
+    }
+  }, [isLoaded, hasData, schoolId, auditAgentsLastRun, runAuditAgents])
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   const getChecklist = (key: string) =>
     auditChecklists.find((c) => c.category === key) || {
-      category: key,
-      checkedItems: [],
-      reviewedAt: null,
-      reviewerNote: '',
+      category: key, checkedItems: [], reviewedAt: null, reviewerNote: '',
     }
+
+  const getItemStatus = (item: string): ItemStatus => {
+    const ci = complianceItems.find((c) => c.item === item)
+    return ci?.status ?? 'manual'
+  }
+
+  const getItemComplianceData = (item: string) =>
+    complianceItems.find((c) => c.item === item)
+
+  const getItemDocGap = (item: string) =>
+    docGaps.find((d) => d.item === item)
 
   const toggleItem = (categoryKey: string, item: string) => {
     const cl = getChecklist(categoryKey)
@@ -337,154 +503,133 @@ export default function AuditPrepPage() {
     setExpandedItem((prev) => (prev === itemText ? null : itemText))
   }
 
-  // ── Overall readiness ──────────────────────────────────────────────────────
-
-  const categoryStatuses = AUDIT_CATEGORIES.map((cat) => {
-    const cl = getChecklist(cat.key)
-    return getReadinessStatus(cl.checkedItems.length, cat.checklistItems.length, cl.reviewedAt)
-  })
-
-  const readyCount = categoryStatuses.filter((s) => s === 'ready').length
-  const atRiskCount = categoryStatuses.filter((s) => s === 'at-risk').length
-  const notReviewedCount = categoryStatuses.filter((s) => s === 'not-reviewed').length
-
-  // ── Generate report ────────────────────────────────────────────────────────
-
-  const generateReport = async () => {
-    setGenerating(true)
-    setGenError(null)
-    try {
-      const res = await fetch('/api/audit-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          schoolName: schoolProfile.name,
-          monthLabel,
-          totalBudget: financialData.totalBudget,
-          totalActuals: financialData.ytdSpending,
-          cashOnHand: financialData.cashOnHand,
-          daysOfReserves: financialData.daysOfReserves,
-          variancePercent: financialData.variancePercent,
-          categories: financialData.categories,
-          grants,
-          alerts,
-          auditChecklists,
-          schoolContextEntries,
-        }),
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Failed to generate report')
-      }
-      const data: AuditReport = await res.json()
-      setReport(data)
-    } catch (err) {
-      setGenError(err instanceof Error ? err.message : 'Failed to generate report.')
-    } finally {
-      setGenerating(false)
-    }
+  // Category status based on AI verification
+  const getCategoryStatus = (catKey: string) => {
+    const catItems = complianceItems.filter((i) => i.category === catKey)
+    if (catItems.length === 0) return 'not-reviewed' as const
+    const hasAction = catItems.some((i) => i.status === 'action')
+    const hasWarning = catItems.some((i) => i.status === 'warning')
+    const allVerifiedOrManual = catItems.every((i) => i.status === 'verified' || i.status === 'manual')
+    if (hasAction) return 'at-risk' as const
+    if (hasWarning) return 'needs-attention' as const
+    if (allVerifiedOrManual) return 'ready' as const
+    return 'not-reviewed' as const
   }
 
-  // ── Export PDF ─────────────────────────────────────────────────────────────
+  const STATUS_CFG = {
+    ready: { label: 'Ready', cls: 'bg-green-100 text-green-800' },
+    'needs-attention': { label: 'Needs Attention', cls: 'bg-yellow-100 text-yellow-800' },
+    'at-risk': { label: 'At Risk', cls: 'bg-red-100 text-red-800' },
+    'not-reviewed': { label: 'Not Reviewed', cls: 'bg-gray-100 text-gray-600' },
+  } as const
+
+  // ── Export PDF ──────────────────────────────────────────────────────────────
 
   const handleExportPDF = async () => {
-    if (!printRef.current || !report) return
+    if (!printRef.current) return
     setExporting(true)
     try {
       const html2canvas = (await import('html2canvas')).default
       const { jsPDF } = await import('jspdf')
-
-      const canvas = await html2canvas(printRef.current, {
-        scale: 1.5,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      })
-
+      const canvas = await html2canvas(printRef.current, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff', logging: false })
       const pdf = new jsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait' })
       const pW = pdf.internal.pageSize.getWidth()
       const pH = pdf.internal.pageSize.getHeight()
-      const MARGIN = 36
-      const HDR_H = 32
-      const FTR_H = 28
-      const TOP = MARGIN + HDR_H
-      const BOTTOM = pH - MARGIN - FTR_H
-      const USABLE_H = BOTTOM - TOP
-      const CW = pW - 2 * MARGIN
-
+      const M = 36, HDR = 32, FTR = 28
+      const TOP = M + HDR, BOT = pH - M - FTR, UH = BOT - TOP, CW = pW - 2 * M
       const ratio = CW / canvas.width
-      let yPx = 0
-      let page = 1
-
-      const addHeaderFooter = (n: number) => {
-        pdf.setFontSize(7.5)
-        pdf.setTextColor(150, 150, 150)
-        pdf.text(
-          `${schoolProfile.name}  ·  SAO Audit Readiness Report  ·  ${monthLabel}`,
-          MARGIN, MARGIN + 14
-        )
-        pdf.setDrawColor(220, 220, 220)
-        pdf.setLineWidth(0.5)
-        pdf.line(MARGIN, MARGIN + 20, pW - MARGIN, MARGIN + 20)
-        pdf.line(MARGIN, BOTTOM + 8, pW - MARGIN, BOTTOM + 8)
-        pdf.setFontSize(7.5)
-        pdf.text(`Page ${n}`, pW / 2, BOTTOM + 20, { align: 'center' })
+      let yPx = 0, page = 1
+      const hf = (n: number) => {
+        pdf.setFontSize(7.5); pdf.setTextColor(150, 150, 150)
+        pdf.text(`${schoolProfile.name}  ·  SAO Audit Readiness Report  ·  ${monthLabel}`, M, M + 14)
+        pdf.setDrawColor(220, 220, 220); pdf.setLineWidth(0.5)
+        pdf.line(M, M + 20, pW - M, M + 20); pdf.line(M, BOT + 8, pW - M, BOT + 8)
+        pdf.text(`Page ${n}`, pW / 2, BOT + 20, { align: 'center' })
       }
-
-      addHeaderFooter(page)
+      hf(page)
       while (yPx < canvas.height) {
-        const sliceH = Math.min(USABLE_H / ratio, canvas.height - yPx)
-        const sliceCanvas = document.createElement('canvas')
-        sliceCanvas.width = canvas.width
-        sliceCanvas.height = sliceH
-        const ctx = sliceCanvas.getContext('2d')!
-        ctx.drawImage(canvas, 0, yPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
-
-        const imgData = sliceCanvas.toDataURL('image/png')
-        pdf.addImage(imgData, 'PNG', MARGIN, TOP, CW, sliceH * ratio)
-        yPx += sliceH
-
-        if (yPx < canvas.height) {
-          pdf.addPage()
-          page++
-          addHeaderFooter(page)
-        }
+        const sh = Math.min(UH / ratio, canvas.height - yPx)
+        const sc = document.createElement('canvas'); sc.width = canvas.width; sc.height = sh
+        sc.getContext('2d')!.drawImage(canvas, 0, yPx, canvas.width, sh, 0, 0, canvas.width, sh)
+        pdf.addImage(sc.toDataURL('image/png'), 'PNG', M, TOP, CW, sh * ratio)
+        yPx += sh
+        if (yPx < canvas.height) { pdf.addPage(); page++; hf(page) }
       }
-
       pdf.save(`${schoolProfile.name.replace(/\s+/g, '_')}_SAO_Audit_Report_${activeMonth}.pdf`)
-    } catch (err) {
-      console.error('PDF export error:', err)
-    } finally {
-      setExporting(false)
-    }
+    } catch (err) { console.error('PDF export error:', err) }
+    finally { setExporting(false) }
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Loading / empty states ──────────────────────────────────────────────────
+
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-gray-400" size={28} />
+      </div>
+    )
+  }
+
+  if (!hasData) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-16 space-y-4">
+        <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center"
+          style={{ background: 'linear-gradient(135deg, var(--brand-100) 0%, var(--brand-50) 100%)' }}>
+          <ClipboardCheck size={24} style={{ color: 'var(--brand-600)' }} />
+        </div>
+        <h2 className="text-xl font-semibold text-gray-800" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+          Audit Prep
+        </h2>
+        <p className="text-gray-500 text-sm max-w-md mx-auto">
+          Upload your financial data first, then come back here to review audit readiness and generate reports.
+        </p>
+        <a href="/upload"
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
+          style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+          <Upload size={16} /> Upload Data
+        </a>
+      </div>
+    )
+  }
+
+  // Derived
+  const categoryStatuses = AUDIT_CATEGORIES.map((cat) =>
+    complianceItems.length > 0 ? getCategoryStatus(cat.key) : 'not-reviewed' as const
+  )
+  const readyCount = categoryStatuses.filter((s) => s === 'ready').length
+  const atRiskCount = categoryStatuses.filter((s) => s === 'at-risk').length
+  const needsAttentionCount = categoryStatuses.filter((s) => s === 'needs-attention').length
+  const notReviewedCount = categoryStatuses.filter((s) => s === 'not-reviewed').length
+
+  const gradeColor = assessment ? {
+    A: 'text-green-600', B: 'text-blue-600', C: 'text-yellow-600', D: 'text-orange-600', F: 'text-red-600',
+  }[assessment.grade] ?? 'text-gray-600' : 'text-gray-400'
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-4xl space-y-8">
+    <div className="max-w-4xl space-y-8" ref={printRef}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900"
-            style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
             Audit Prep
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
             WA State Auditor&apos;s Office charter school accountability audit areas
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2" data-html2canvas-ignore>
           <button
-            onClick={generateReport}
-            disabled={generating}
+            onClick={() => { hasTriggered.current = true; runAuditAgents() }}
+            disabled={isRunning}
             className="flex items-center gap-2 px-4 py-2.5 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors disabled:opacity-50"
             style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
           >
-            {generating ? <Loader2 size={16} className="animate-spin" /> : <ClipboardCheck size={16} />}
-            {generating ? 'Generating...' : 'Generate Report'}
+            {isRunning ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            {isRunning ? 'Analyzing...' : 'Re-run Assessment'}
           </button>
-          {report && (
+          {(assessment || complianceItems.length > 0) && (
             <button
               onClick={handleExportPDF}
               disabled={exporting}
@@ -498,20 +643,127 @@ export default function AuditPrepPage() {
         </div>
       </div>
 
-      {genError && (
-        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm flex items-start gap-2">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          {genError}
+      {/* Agent running indicator */}
+      {isRunning && (
+        <div className="ai-briefing px-5 py-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Bot size={15} style={{ color: 'var(--brand-500)' }} />
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--brand-500)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+              Audit Agent Team
+            </span>
+            <Loader2 size={13} className="animate-spin" style={{ color: 'var(--brand-400)' }} />
+          </div>
+          {(() => {
+            const phase = agentPhase as string
+            return (
+              <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                <span className={phase === 'compliance' ? 'font-semibold text-gray-800' : 'text-green-600'}>
+                  {phase === 'compliance' ? '● Verifying compliance...' : '✓ Compliance'}
+                </span>
+                <span className={phase === 'federal' ? 'font-semibold text-gray-800' : ['docs', 'coordinator', 'done'].includes(phase) ? 'text-green-600' : ''}>
+                  {phase === 'federal' ? '● Federal programs...' : ['docs', 'coordinator', 'done'].includes(phase) ? '✓ Federal' : '○ Federal'}
+                </span>
+                <span className={phase === 'docs' ? 'font-semibold text-gray-800' : ['coordinator', 'done'].includes(phase) ? 'text-green-600' : ''}>
+                  {phase === 'docs' ? '● Doc gaps...' : ['coordinator', 'done'].includes(phase) ? '✓ Docs' : '○ Docs'}
+                </span>
+                <span className={phase === 'coordinator' ? 'font-semibold text-gray-800' : phase === 'done' ? 'text-green-600' : ''}>
+                  {phase === 'coordinator' ? '● Synthesizing...' : phase === 'done' ? '✓ Complete' : '○ Synthesis'}
+                </span>
+              </div>
+            )
+          })()}
         </div>
       )}
 
-      {/* SAO context banner */}
-      <div className="p-3.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-xs leading-relaxed">
-        Based on WA State Auditor&apos;s Office published charter school accountability audit focus areas.
-        Click any checklist item to see detailed guidance on why it matters, how to comply, and what documentation to have ready.
-      </div>
+      {agentError && (
+        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm flex items-start gap-2">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          {agentError}
+        </div>
+      )}
 
-      {/* Readiness Summary */}
+      {/* AI Readiness Assessment Card */}
+      {assessment && (
+        <div className="ai-briefing px-6 py-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-5 h-5 rounded-md flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--accent-500) 100%)' }}>
+              <span className="text-white text-xs font-bold" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>AI</span>
+            </div>
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--brand-500)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+              Readiness Assessment
+            </span>
+            {auditAgentsLastRun && (
+              <span className="text-xs ml-auto" style={{ color: 'var(--text-tertiary)' }}>
+                Last assessed: {new Date(auditAgentsLastRun).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-6 mb-5">
+            <div className="text-center">
+              <div className={`text-5xl font-bold ${gradeColor}`} style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+                {assessment.score}
+              </div>
+              <div className={`text-lg font-bold ${gradeColor}`} style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+                {assessment.grade}
+              </div>
+            </div>
+            <div className="flex-1">
+              <div className="h-3 bg-gray-200 rounded-full overflow-hidden mb-2">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${assessment.score}%`,
+                    background: assessment.score >= 80 ? '#22c55e' : assessment.score >= 60 ? '#eab308' : assessment.score >= 40 ? '#f97316' : '#ef4444',
+                  }}
+                />
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                Estimated time to full readiness: {assessment.estimatedTimeToReady}
+              </p>
+            </div>
+          </div>
+
+          {/* Priority Actions */}
+          {assessment.priorityActions.length > 0 && (
+            <div className="mb-4 p-4 bg-amber-50/80 border border-amber-200 rounded-lg">
+              <h4 className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <AlertTriangle size={12} />
+                Top 3 Priority Actions
+              </h4>
+              <ol className="list-decimal list-inside space-y-1.5">
+                {assessment.priorityActions.slice(0, 3).map((pa, i) => (
+                  <li key={i} className="text-sm text-amber-900">
+                    {pa.action}
+                    <span className="text-xs text-amber-600 ml-1">({pa.timeEstimate})</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {/* Executive Summary (collapsible) */}
+          <div>
+            <button
+              onClick={() => setSummaryExpanded(!summaryExpanded)}
+              className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide mb-1"
+              style={{ color: 'var(--brand-500)' }}
+              data-html2canvas-ignore
+            >
+              Executive Summary
+              {summaryExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+            {summaryExpanded && (
+              <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: 'var(--text-secondary)' }}>
+                {assessment.executiveSummary}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Readiness Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="card-static p-4 text-center">
           <div className="text-2xl font-bold" style={{ color: 'var(--brand-700)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
@@ -521,7 +773,7 @@ export default function AuditPrepPage() {
         </div>
         <div className="card-static p-4 text-center">
           <div className="text-2xl font-bold text-yellow-600" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
-            {AUDIT_CATEGORIES.length - readyCount - atRiskCount - notReviewedCount}
+            {needsAttentionCount}
           </div>
           <div className="text-xs text-gray-500 mt-1">Needs Attention</div>
         </div>
@@ -539,6 +791,14 @@ export default function AuditPrepPage() {
         </div>
       </div>
 
+      {/* SAO context banner */}
+      <div className="p-3.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-xs leading-relaxed">
+        Based on WA State Auditor&apos;s Office published charter school accountability audit focus areas.
+        {complianceItems.length > 0
+          ? ` AI agents have verified ${complianceItems.filter((i) => i.status === 'verified').length} items from your data. Items marked "Manual Review" require human assessment.`
+          : ' Click any checklist item to see detailed guidance on why it matters, how to comply, and what documentation to have ready.'}
+      </div>
+
       {/* Audit Category Cards */}
       <div className="space-y-3">
         {AUDIT_CATEGORIES.map((cat, idx) => {
@@ -547,7 +807,9 @@ export default function AuditPrepPage() {
           const cfg = STATUS_CFG[status]
           const expanded = expandedCategory === cat.key
           const Icon = cat.icon
-          const checkedCount = cl.checkedItems.length
+          const catComplianceItems = complianceItems.filter((i) => i.category === cat.key)
+          const verifiedCount = catComplianceItems.filter((i) => i.status === 'verified').length
+          const gapCount = catComplianceItems.filter((i) => i.status === 'warning' || i.status === 'action').length
 
           return (
             <div key={cat.key} className="card-static overflow-hidden">
@@ -562,30 +824,29 @@ export default function AuditPrepPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-semibold text-gray-800"
-                      style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+                    <h3 className="text-sm font-semibold text-gray-800" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
                       {cat.label}
                     </h3>
                     <span className={`inline-flex text-xs px-3 py-1 rounded-full font-medium ${cfg.cls}`}>
                       {cfg.label}
                     </span>
-                    {cl.reviewedAt && (
-                      <span className="text-xs text-gray-400 flex items-center gap-1">
-                        <CheckCircle size={11} /> Reviewed
-                      </span>
-                    )}
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">{cat.description}</p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs font-medium text-gray-500">
-                    {checkedCount}/{cat.checklistItems.length}
-                  </span>
+                  {catComplianceItems.length > 0 && (
+                    <span className="text-xs text-gray-500">
+                      <span className="text-green-600 font-medium">{verifiedCount}✓</span>
+                      {gapCount > 0 && <span className="text-red-500 font-medium ml-1">{gapCount}!</span>}
+                    </span>
+                  )}
                   <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden hidden sm:block">
                     <div
                       className="h-full rounded-full transition-all"
                       style={{
-                        width: `${(checkedCount / cat.checklistItems.length) * 100}%`,
+                        width: catComplianceItems.length > 0
+                          ? `${(verifiedCount / cat.checklistItems.length) * 100}%`
+                          : `${(cl.checkedItems.length / cat.checklistItems.length) * 100}%`,
                         background: status === 'ready' ? '#22c55e' : status === 'needs-attention' ? '#eab308' : status === 'at-risk' ? '#ef4444' : '#d1d5db',
                       }}
                     />
@@ -598,55 +859,66 @@ export default function AuditPrepPage() {
               {expanded && (
                 <div className="border-t border-gray-100 px-5 py-4 space-y-1">
                   {cat.checklistItems.map((item) => {
+                    const itemStatus = getItemStatus(item)
                     const checked = cl.checkedItems.includes(item)
                     const isDetailOpen = expandedItem === item
                     const hasDetail = !!getChecklistItemDetail(item)
+                    const compData = getItemComplianceData(item)
+                    const docGapData = getItemDocGap(item)
 
                     return (
                       <div key={item}>
-                        {/* Checklist row */}
                         <div className="flex items-start gap-3 py-2 group">
-                          {/* Checkbox — stops propagation so clicking it doesn't toggle the detail */}
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleItem(cat.key, item)}
-                            className="mt-1 w-4 h-4 rounded border-gray-300 text-[#1e3a5f] focus:ring-[#1e3a5f]/20 cursor-pointer shrink-0"
-                          />
-                          {/* Clickable label area — toggles detail panel */}
+                          {/* Status icon or checkbox for manual items */}
+                          {complianceItems.length > 0 && itemStatus !== 'manual' ? (
+                            <div className="mt-0.5 shrink-0">
+                              <StatusBadge status={itemStatus} />
+                            </div>
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleItem(cat.key, item)}
+                              className="mt-1 w-4 h-4 rounded border-gray-300 text-[#1e3a5f] focus:ring-[#1e3a5f]/20 cursor-pointer shrink-0"
+                            />
+                          )}
+                          {/* Clickable label */}
                           <button
                             onClick={() => hasDetail && toggleItemDetail(item)}
                             className={`flex-1 text-left flex items-start gap-2 ${hasDetail ? 'cursor-pointer' : 'cursor-default'}`}
                           >
-                            <span className={`text-sm leading-relaxed ${checked ? 'text-gray-400 line-through' : 'text-gray-700'} ${hasDetail ? 'group-hover:text-gray-900' : ''} transition-colors`}>
+                            <span className={`text-sm leading-relaxed ${
+                              itemStatus === 'verified' ? 'text-green-800' :
+                              itemStatus === 'action' ? 'text-red-800' :
+                              itemStatus === 'warning' ? 'text-yellow-800' :
+                              checked ? 'text-gray-400 line-through' : 'text-gray-700'
+                            } ${hasDetail ? 'group-hover:text-gray-900' : ''} transition-colors`}>
                               {item}
                             </span>
                           </button>
-                          {/* Chevron indicator */}
                           {hasDetail && (
                             <button
                               onClick={() => toggleItemDetail(item)}
                               className="mt-0.5 shrink-0 text-gray-300 hover:text-blue-500 transition-all"
                             >
-                              <ChevronRight
-                                size={14}
-                                className={`transition-transform duration-200 ${isDetailOpen ? 'rotate-90' : ''}`}
-                              />
+                              <ChevronRight size={14} className={`transition-transform duration-200 ${isDetailOpen ? 'rotate-90' : ''}`} />
                             </button>
                           )}
                         </div>
-
-                        {/* Detail panel */}
-                        {isDetailOpen && <ItemDetailPanel itemText={item} />}
+                        {isDetailOpen && (
+                          <ItemDetailPanel
+                            itemText={item}
+                            complianceItem={compData}
+                            docGap={docGapData}
+                          />
+                        )}
                       </div>
                     )
                   })}
 
                   {/* Reviewer note */}
-                  <div className="pt-3">
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                      Reviewer Notes
-                    </label>
+                  <div className="pt-3" data-html2canvas-ignore>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Reviewer Notes</label>
                     <textarea
                       value={cl.reviewerNote}
                       onChange={(e) => handleNoteChange(cat.key, e.target.value)}
@@ -656,14 +928,12 @@ export default function AuditPrepPage() {
                     />
                   </div>
 
-                  {/* Mark Reviewed button */}
-                  <div className="flex items-center gap-3 pt-1">
+                  {/* Mark Reviewed */}
+                  <div className="flex items-center gap-3 pt-1" data-html2canvas-ignore>
                     <button
                       onClick={() => markAuditReviewed(cat.key)}
                       className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        cl.reviewedAt
-                          ? 'bg-green-50 text-green-700 border border-green-200'
-                          : 'text-white hover:opacity-90'
+                        cl.reviewedAt ? 'bg-green-50 text-green-700 border border-green-200' : 'text-white hover:opacity-90'
                       }`}
                       style={!cl.reviewedAt ? {
                         background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)',
@@ -675,9 +945,7 @@ export default function AuditPrepPage() {
                     </button>
                     {cl.reviewedAt && (
                       <span className="text-xs text-gray-400">
-                        {new Date(cl.reviewedAt).toLocaleDateString('en-US', {
-                          month: 'short', day: 'numeric', year: 'numeric',
-                        })}
+                        {new Date(cl.reviewedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </span>
                     )}
                   </div>
@@ -687,88 +955,6 @@ export default function AuditPrepPage() {
           )
         })}
       </div>
-
-      {/* AI-Generated Report */}
-      {report && (
-        <div ref={printRef} className="space-y-6">
-          <div className="card-static p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-1"
-              style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
-              SAO Audit Readiness Report — {monthLabel}
-            </h2>
-            <p className="text-xs text-gray-400 mb-5">
-              Based on WA State Auditor&apos;s Office charter school accountability audit framework
-            </p>
-
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                Executive Summary
-              </h3>
-              <div className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
-                {report.executiveSummary}
-              </div>
-            </div>
-
-            {report.priorityActions.length > 0 && (
-              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <h3 className="text-sm font-semibold text-amber-800 mb-2 flex items-center gap-2">
-                  <AlertTriangle size={14} />
-                  Priority Actions
-                </h3>
-                <ol className="list-decimal list-inside space-y-1">
-                  {report.priorityActions.map((action, i) => (
-                    <li key={i} className="text-sm text-amber-900">{action}</li>
-                  ))}
-                </ol>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                Findings by Audit Area
-              </h3>
-              {report.categoryFindings.map((finding) => {
-                const statusCls = finding.status === 'ready'
-                  ? 'bg-green-100 text-green-800'
-                  : finding.status === 'needs-attention'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : 'bg-red-100 text-red-800'
-                const statusLabel = finding.status === 'ready'
-                  ? 'Ready'
-                  : finding.status === 'needs-attention'
-                  ? 'Needs Attention'
-                  : 'At Risk'
-
-                return (
-                  <div key={finding.category} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h4 className="text-sm font-semibold text-gray-800">{finding.category}</h4>
-                      <span className={`inline-flex text-xs px-3 py-1 rounded-full font-medium ${statusCls}`}>
-                        {statusLabel}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-2">{finding.findings}</p>
-                    {finding.recommendations.length > 0 && (
-                      <ul className="list-disc list-inside space-y-0.5">
-                        {finding.recommendations.map((rec, i) => (
-                          <li key={i} className="text-sm text-gray-600">{rec}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="text-sm font-semibold text-blue-800 mb-2">
-                Timeline Recommendation
-              </h3>
-              <p className="text-sm text-blue-900">{report.timelineRecommendation}</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -126,8 +126,8 @@ export interface AuditChecklist {
   reviewerNote: string
 }
 
-export type AgentName = 'budget_analyst' | 'cash_sentinel' | 'grants_officer' | 'board_prep'
-export type FindingType = 'variance' | 'cash_risk' | 'grant_underspend' | 'grant_overspend' | 'braiding_opportunity' | 'board_action_required'
+export type AgentName = 'budget_analyst' | 'cash_sentinel' | 'grants_officer' | 'board_prep' | 'audit_compliance' | 'audit_federal'
+export type FindingType = 'variance' | 'cash_risk' | 'grant_underspend' | 'grant_overspend' | 'braiding_opportunity' | 'board_action_required' | 'audit_verified' | 'audit_gap' | 'audit_manual' | 'federal_risk'
 export type FindingSeverity = 'info' | 'watch' | 'concern' | 'action'
 
 export interface AgentFinding {
@@ -162,6 +162,9 @@ interface AppState {
   auditChecklists: AuditChecklist[]
   agentFindings: AgentFinding[]
   lastAgentRunAt: string | null
+  auditAgentsLastRun: string | null
+  auditReadinessScore: number | null
+  auditReadinessGrade: string | null
 
   // ── Actions ──
   setSchoolContext: (userId: string, schoolId: string) => void
@@ -194,6 +197,7 @@ interface AppState {
   deleteSnapshot: (monthKey: string) => void
   setAgentFindings: (findings: AgentFinding[]) => void
   setLastAgentRunAt: (ts: string) => void
+  setAuditMeta: (meta: { lastRun: string; score?: number; grade?: string }) => void
 }
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
@@ -394,6 +398,9 @@ export const useStore = create<AppState>((set, get) => ({
   auditChecklists: [],
   agentFindings: [],
   lastAgentRunAt: null,
+  auditAgentsLastRun: null,
+  auditReadinessScore: null,
+  auditReadinessGrade: null,
 
   // ── Auth actions ──
 
@@ -432,6 +439,9 @@ export const useStore = create<AppState>((set, get) => ({
           nextBoardMeeting: school.next_board_meeting || existing.nextBoardMeeting,
           nextFinanceCommittee: school.next_finance_committee || existing.nextFinanceCommittee,
         },
+        auditAgentsLastRun: school.audit_agents_last_run ?? null,
+        auditReadinessScore: school.audit_readiness_score ?? null,
+        auditReadinessGrade: school.audit_readiness_grade ?? null,
       })
     }
 
@@ -1296,4 +1306,22 @@ export const useStore = create<AppState>((set, get) => ({
 
   setAgentFindings: (findings) => set({ agentFindings: findings }),
   setLastAgentRunAt: (ts) => set({ lastAgentRunAt: ts }),
+
+  setAuditMeta: (meta) => {
+    set({
+      auditAgentsLastRun: meta.lastRun,
+      auditReadinessScore: meta.score ?? null,
+      auditReadinessGrade: meta.grade ?? null,
+    })
+    const { schoolId } = get()
+    if (schoolId) {
+      writeThrough(async (supabase) => {
+        const update: Record<string, unknown> = { audit_agents_last_run: meta.lastRun }
+        if (meta.score != null) update.audit_readiness_score = meta.score
+        if (meta.grade != null) update.audit_readiness_grade = meta.grade
+        const { error } = await supabase.from('schools').update(update).eq('id', schoolId)
+        if (error) console.error('[store] setAuditMeta', error)
+      })
+    }
+  },
 }))

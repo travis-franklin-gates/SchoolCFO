@@ -106,6 +106,7 @@ export default function BoardPacketPage() {
     updateBoardPacketContent,
     setActiveMonth,
     isLoaded,
+    schoolContextEntries,
   } = useStore()
 
   const printRef = useRef<HTMLDivElement>(null)
@@ -223,6 +224,7 @@ export default function BoardPacketPage() {
           flaggedCategories,
           grants,
           alerts,
+          schoolContextEntries,
         }),
       })
 

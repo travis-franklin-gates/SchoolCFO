@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { CLAUDE_MODEL } from '@/lib/constants'
+import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
 
 export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -12,12 +13,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { schoolProfile, financialData, alerts, pacePercent, monthLabel } = body as {
+    const { schoolProfile, financialData, alerts, pacePercent, monthLabel, schoolContextEntries = [] } = body as {
       schoolProfile: Record<string, unknown>
       financialData: Record<string, unknown>
       alerts: unknown
       pacePercent: number
       monthLabel: string
+      schoolContextEntries: ContextEntry[]
     }
 
     const spName = String(schoolProfile?.name ?? 'the school')
@@ -64,7 +66,7 @@ ${flagged.map((c) => {
 }).join('\n') || 'None'}
 
 ACTIVE ALERTS:
-${alertList.map((a) => `- [${String(a.severity ?? 'info').toUpperCase()}] ${String(a.message ?? '')}`).join('\n') || 'None'}`
+${alertList.map((a) => `- [${String(a.severity ?? 'info').toUpperCase()}] ${String(a.message ?? '')}`).join('\n') || 'None'}${buildSchoolContextBlock(schoolContextEntries)}`
 
     const response = await client.messages.create({
       model: CLAUDE_MODEL,

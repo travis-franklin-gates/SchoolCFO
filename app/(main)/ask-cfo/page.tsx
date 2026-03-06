@@ -106,7 +106,7 @@ async function buildApiContent(file: File, userText: string): Promise<string | C
 }
 
 export default function AskCFOPage() {
-  const { chatMessages, addChatMessage, updateChatMessage, clearChat, schoolProfile, financialData, grants, alerts, otherGrants, activeMonth } =
+  const { chatMessages, addChatMessage, updateChatMessage, clearChat, schoolProfile, financialData, grants, alerts, otherGrants, activeMonth, schoolContextEntries } =
     useStore()
 
   const [input, setInput] = useState('')
@@ -211,6 +211,7 @@ export default function AskCFOPage() {
           alerts,
           otherGrants,
           activeMonth,
+          schoolContextEntries,
         }),
       })
 

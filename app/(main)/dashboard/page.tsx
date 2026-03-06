@@ -72,6 +72,7 @@ export default function DashboardPage() {
     setActiveMonth,
     boardPackets,
     isLoaded,
+    schoolContextEntries,
   } = useStore()
 
   const [briefing, setBriefing] = useState('')
@@ -106,7 +107,7 @@ export default function DashboardPage() {
         const res = await fetch('/api/briefing', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ schoolProfile, financialData, alerts, pacePercent, monthLabel }),
+          body: JSON.stringify({ schoolProfile, financialData, alerts, pacePercent, monthLabel, schoolContextEntries }),
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const { briefing: text } = (await res.json()) as { briefing?: string }

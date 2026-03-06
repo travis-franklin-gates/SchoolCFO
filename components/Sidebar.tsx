@@ -9,6 +9,7 @@ import {
   BarChart2,
   Award,
   FileText,
+  ClipboardCheck,
   MessageCircle,
   Settings,
   LogOut,
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/budget-analysis', icon: BarChart2, label: 'Budget Analysis' },
   { href: '/grant-tracker', icon: Award, label: 'Grant Tracker' },
   { href: '/board-packet', icon: FileText, label: 'Board Packet' },
+  { href: '/audit-prep', icon: ClipboardCheck, label: 'Audit Prep' },
   { href: '/ask-cfo', icon: MessageCircle, label: 'Ask Your CFO' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ]

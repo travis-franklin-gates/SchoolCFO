@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { CLAUDE_MODEL } from '@/lib/constants'
+import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
       flaggedCategories,
       grants,
       alerts,
+      schoolContextEntries = [],
     } = await req.json()
 
     const expectedPct = Math.round(pace * 100)
@@ -70,7 +72,7 @@ ${grantList}
 Active alerts:
 ${alertList || 'None'}
 
-${OSPI_SCHEDULE}
+${OSPI_SCHEDULE}${buildSchoolContextBlock(schoolContextEntries as ContextEntry[])}
 
 Return a JSON object with exactly these three keys. No other text, no markdown fences — just raw JSON:
 

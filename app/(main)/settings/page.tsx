@@ -3,6 +3,7 @@
 import { useState, FormEvent } from 'react'
 import { Plus, Trash2, Check, Zap, Pencil, X } from 'lucide-react'
 import { useStore, type OtherGrant, type OtherGrantRestrictions } from '@/lib/store'
+import SchoolContextManager from '@/components/SchoolContextManager'
 
 // ── Quick-add presets for common philanthropic/federal grants ──────────────────
 
@@ -546,6 +547,9 @@ export default function SettingsPage() {
           ))}
         </div>
       </div>
+
+      {/* ── School Context for AI ── */}
+      <SchoolContextManager />
 
       {/* ── Other Grants & Philanthropic Funding ── */}
       <div className="card-static p-6">

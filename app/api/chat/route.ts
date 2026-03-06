@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { fiscalIndexFromKey } from '@/lib/fiscalYear'
 import { CLAUDE_MODEL } from '@/lib/constants'
+import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -10,7 +11,8 @@ function buildSystemPrompt(
   grants: Array<Record<string, unknown>>,
   alerts: Array<Record<string, unknown>>,
   otherGrants: Array<Record<string, unknown>>,
-  activeMonth: string
+  activeMonth: string,
+  schoolContextEntries: ContextEntry[] = []
 ): string {
   // WA State fiscal year — September 1 start. Update when adding multi-state support.
   const monthsElapsed = fiscalIndexFromKey(activeMonth)
@@ -97,14 +99,14 @@ ACTIVE ALERTS:
 ${alerts.map((a) => {
   const alert = a as { severity: string; message: string }
   return `- [${alert.severity.toUpperCase()}] ${alert.message}`
-}).join('\n')}`
+}).join('\n')}${buildSchoolContextBlock(schoolContextEntries)}`
 }
 
 export async function POST(req: Request) {
   try {
-    const { messages, schoolProfile, financialData, grants, alerts, otherGrants = [], activeMonth = '2026-03' } = await req.json()
+    const { messages, schoolProfile, financialData, grants, alerts, otherGrants = [], activeMonth = '2026-03', schoolContextEntries = [] } = await req.json()
 
-    const systemPrompt = buildSystemPrompt(schoolProfile, financialData, grants, alerts, otherGrants, activeMonth)
+    const systemPrompt = buildSystemPrompt(schoolProfile, financialData, grants, alerts, otherGrants, activeMonth, schoolContextEntries)
 
     const stream = client.messages.stream({
       model: CLAUDE_MODEL,

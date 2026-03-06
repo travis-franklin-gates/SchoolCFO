@@ -109,6 +109,23 @@ export interface BoardPacket {
   content?: BoardPacketContent
 }
 
+export type SchoolContextType = 'guided' | 'freeform' | 'event_flag'
+
+export interface SchoolContextEntry {
+  id: string
+  contextType: SchoolContextType
+  key: string
+  value: Record<string, unknown>
+  expiresAt: string | null  // "YYYY-MM-DD" or null
+}
+
+export interface AuditChecklist {
+  category: string
+  checkedItems: string[]
+  reviewedAt: string | null
+  reviewerNote: string
+}
+
 interface AppState {
   // ── Auth / persistence ──
   schoolId: string | null
@@ -125,6 +142,8 @@ interface AppState {
   activeMonth: string
   chatMessages: ChatMessage[]
   boardPackets: BoardPacket[]
+  schoolContextEntries: SchoolContextEntry[]
+  auditChecklists: AuditChecklist[]
 
   // ── Actions ──
   setSchoolContext: (userId: string, schoolId: string) => void
@@ -150,6 +169,10 @@ interface AppState {
     rowCount: number,
     importedGrants?: MappedGrant[]
   ) => void
+  upsertSchoolContextEntry: (entry: SchoolContextEntry) => void
+  removeSchoolContextEntry: (id: string) => void
+  updateAuditChecklist: (category: string, checkedItems: string[], reviewerNote?: string) => void
+  markAuditReviewed: (category: string) => void
 }
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
@@ -346,6 +369,8 @@ export const useStore = create<AppState>((set, get) => ({
   activeMonth: '2026-03',
   chatMessages: [],
   boardPackets: SEED_BOARD_PACKETS,
+  schoolContextEntries: [],
+  auditChecklists: [],
 
   // ── Auth actions ──
 
@@ -535,6 +560,42 @@ export const useStore = create<AppState>((set, get) => ({
       set({ boardPackets })
     } else {
       set({ boardPackets: [] })
+    }
+
+    // 5. Load school context entries
+    const { data: ctxRows } = await supabase
+      .from('school_context')
+      .select('*')
+      .eq('school_id', schoolId)
+      .order('created_at', { ascending: true })
+
+    if (ctxRows && ctxRows.length > 0) {
+      set({
+        schoolContextEntries: ctxRows.map((r) => ({
+          id: r.id,
+          contextType: r.context_type as SchoolContextType,
+          key: r.key,
+          value: (r.value as Record<string, unknown>) ?? {},
+          expiresAt: r.expires_at ?? null,
+        })),
+      })
+    }
+
+    // 6. Load audit checklists
+    const { data: auditRows } = await supabase
+      .from('audit_checklists')
+      .select('*')
+      .eq('school_id', schoolId)
+
+    if (auditRows && auditRows.length > 0) {
+      set({
+        auditChecklists: auditRows.map((r) => ({
+          category: r.category,
+          checkedItems: (r.checked_items as string[]) ?? [],
+          reviewedAt: r.reviewed_at ?? null,
+          reviewerNote: r.reviewer_note ?? '',
+        })),
+      })
     }
 
     set({ isLoaded: true })
@@ -1037,5 +1098,107 @@ export const useStore = create<AppState>((set, get) => ({
           : p
       ),
     }))
+  },
+
+  // ── School Context ──
+
+  upsertSchoolContextEntry: (entry) => {
+    set((state) => {
+      const idx = state.schoolContextEntries.findIndex((e) => e.id === entry.id)
+      if (idx >= 0) {
+        const updated = [...state.schoolContextEntries]
+        updated[idx] = entry
+        return { schoolContextEntries: updated }
+      }
+      return { schoolContextEntries: [...state.schoolContextEntries, entry] }
+    })
+    const { schoolId } = get()
+    if (schoolId) {
+      writeThrough(async (supabase) => {
+        const { error } = await supabase.from('school_context').upsert({
+          id: entry.id,
+          school_id: schoolId,
+          context_type: entry.contextType,
+          key: entry.key,
+          value: entry.value,
+          expires_at: entry.expiresAt || null,
+        })
+        if (error) console.error('[store] upsertSchoolContextEntry', error)
+      })
+    }
+  },
+
+  removeSchoolContextEntry: (id) => {
+    set((state) => ({
+      schoolContextEntries: state.schoolContextEntries.filter((e) => e.id !== id),
+    }))
+    writeThrough(async (supabase) => {
+      const { error } = await supabase.from('school_context').delete().eq('id', id)
+      if (error) console.error('[store] removeSchoolContextEntry', error)
+    })
+  },
+
+  // ── Audit Checklists ──
+
+  updateAuditChecklist: (category, checkedItems, reviewerNote) => {
+    set((state) => {
+      const idx = state.auditChecklists.findIndex((c) => c.category === category)
+      const entry: AuditChecklist = {
+        category,
+        checkedItems,
+        reviewedAt: state.auditChecklists[idx]?.reviewedAt ?? null,
+        reviewerNote: reviewerNote ?? state.auditChecklists[idx]?.reviewerNote ?? '',
+      }
+      if (idx >= 0) {
+        const updated = [...state.auditChecklists]
+        updated[idx] = entry
+        return { auditChecklists: updated }
+      }
+      return { auditChecklists: [...state.auditChecklists, entry] }
+    })
+    const { schoolId } = get()
+    if (schoolId) {
+      writeThrough(async (supabase) => {
+        const existing = get().auditChecklists.find((c) => c.category === category)
+        const { error } = await supabase.from('audit_checklists').upsert({
+          school_id: schoolId,
+          category,
+          checked_items: checkedItems,
+          reviewed_at: existing?.reviewedAt || null,
+          reviewer_note: reviewerNote ?? existing?.reviewerNote ?? '',
+        }, { onConflict: 'school_id,category' })
+        if (error) console.error('[store] updateAuditChecklist', error)
+      })
+    }
+  },
+
+  markAuditReviewed: (category) => {
+    const now = new Date().toISOString()
+    set((state) => {
+      const idx = state.auditChecklists.findIndex((c) => c.category === category)
+      if (idx >= 0) {
+        const updated = [...state.auditChecklists]
+        updated[idx] = { ...updated[idx], reviewedAt: now }
+        return { auditChecklists: updated }
+      }
+      return {
+        auditChecklists: [
+          ...state.auditChecklists,
+          { category, checkedItems: [], reviewedAt: now, reviewerNote: '' },
+        ],
+      }
+    })
+    const { schoolId } = get()
+    if (schoolId) {
+      writeThrough(async (supabase) => {
+        const { error } = await supabase.from('audit_checklists').upsert({
+          school_id: schoolId,
+          category,
+          checked_items: get().auditChecklists.find((c) => c.category === category)?.checkedItems ?? [],
+          reviewed_at: now,
+        }, { onConflict: 'school_id,category' })
+        if (error) console.error('[store] markAuditReviewed', error)
+      })
+    }
   },
 }))

@@ -308,9 +308,12 @@ export default function AuditPrepPage() {
     markAuditReviewed,
     schoolId,
     auditAgentsLastRun,
+    auditReadinessScore,
+    auditReadinessGrade,
     setAuditMeta,
     setAgentFindings,
     agentFindings,
+    monthlySnapshots,
   } = useStore()
 
   const printRef = useRef<HTMLDivElement>(null)
@@ -455,18 +458,54 @@ export default function AuditPrepPage() {
     }
   }, [schoolId, hasData, activeMonth, grants, financialData, schoolProfile.name, agentFindings, setAuditMeta, setAgentFindings])
 
-  // Auto-trigger on page load
+  // Auto-trigger ONLY on first visit (no baseline exists)
   useEffect(() => {
     if (hasTriggered.current || !isLoaded || !hasData || !schoolId) return
+    if (auditAgentsLastRun) return // Baseline exists — show cached data, don't auto-run
 
-    const shouldRun = !auditAgentsLastRun ||
-      (Date.now() - new Date(auditAgentsLastRun).getTime()) > 7 * 86_400_000
-
-    if (shouldRun) {
-      hasTriggered.current = true
-      runAuditAgents()
-    }
+    hasTriggered.current = true
+    runAuditAgents()
   }, [isLoaded, hasData, schoolId, auditAgentsLastRun, runAuditAgents])
+
+  // Load cached compliance data from agent_findings when baseline exists (no agent run needed)
+  useEffect(() => {
+    if (!isLoaded || !schoolId || !auditAgentsLastRun || complianceItems.length > 0) return
+
+    // Populate compliance items from cached agent_findings
+    const auditFindings = agentFindings.filter((f) => f.agentName === 'audit_compliance')
+    if (auditFindings.length > 0) {
+      const items: ComplianceItem[] = auditFindings.map((f) => ({
+        item: f.title,
+        category: (f.detail?.category as string) ?? '',
+        status: (f.detail?.status as ItemStatus) ?? 'manual',
+        reason: f.summary,
+      }))
+      setComplianceItems(items)
+    }
+
+    // Populate cached assessment from store meta
+    if (auditReadinessScore != null && auditReadinessGrade) {
+      setAssessment((prev) => prev ?? {
+        score: auditReadinessScore,
+        grade: auditReadinessGrade,
+        priorityActions: [],
+        executiveSummary: '',
+        categoryStatus: [],
+        estimatedTimeToReady: '',
+      })
+    }
+  }, [isLoaded, schoolId, auditAgentsLastRun, agentFindings, complianceItems.length, auditReadinessScore, auditReadinessGrade])
+
+  // Stale data check (30+ days)
+  const isStale = auditAgentsLastRun
+    ? (Date.now() - new Date(auditAgentsLastRun).getTime()) > 30 * 86_400_000
+    : false
+
+  // Most recent upload date
+  const mostRecentUpload = Object.values(monthlySnapshots)
+    .map((s) => s.uploadedAt)
+    .sort()
+    .pop()
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -618,6 +657,18 @@ export default function AuditPrepPage() {
           <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
             WA State Auditor&apos;s Office charter school accountability audit areas
           </p>
+          {auditAgentsLastRun && !isRunning && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                Last assessed: {new Date(auditAgentsLastRun).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </span>
+              {mostRecentUpload && (
+                <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  Based on data uploaded through {new Date(mostRecentUpload).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex gap-2" data-html2canvas-ignore>
           <button
@@ -643,13 +694,21 @@ export default function AuditPrepPage() {
         </div>
       </div>
 
+      {/* Stale data warning */}
+      {isStale && !isRunning && (
+        <div className="flex items-center gap-2 p-3.5 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+          <AlertTriangle size={15} className="shrink-0" />
+          Assessment is 30+ days old. Click <strong>Re-run Assessment</strong> for current results.
+        </div>
+      )}
+
       {/* Agent running indicator */}
       {isRunning && (
         <div className="ai-briefing px-5 py-4">
           <div className="flex items-center gap-2 mb-2">
             <Bot size={15} style={{ color: 'var(--brand-500)' }} />
             <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--brand-500)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
-              Audit Agent Team
+              {!auditAgentsLastRun ? 'Running Initial Assessment...' : 'Audit Agent Team'}
             </span>
             <Loader2 size={13} className="animate-spin" style={{ color: 'var(--brand-400)' }} />
           </div>

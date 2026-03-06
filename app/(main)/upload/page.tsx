@@ -276,8 +276,27 @@ export default function UploadPage() {
             otherGrants: state.otherGrants,
           }),
         }),
+        // Audit agents: compliance + federal (lightweight — no Claude for compliance, single call for federal)
+        fetch('/api/agents/audit-compliance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ schoolId, activeMonth: selectedMonth }),
+        }),
+        fetch('/api/agents/audit-federal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schoolId,
+            activeMonth: selectedMonth,
+            grants: state.grants,
+            totalBudget: fd.totalBudget,
+            ytdSpending: fd.ytdSpending,
+          }),
+        }),
       ]).then(() => {
-        useStore.getState().setLastAgentRunAt(new Date().toISOString())
+        const now = new Date().toISOString()
+        useStore.getState().setLastAgentRunAt(now)
+        useStore.getState().setAuditMeta({ lastRun: now })
       }).catch((err) => {
         console.error('[agents] trigger failed:', err)
       })

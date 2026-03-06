@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import {
   FileText,
   Download,
@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   ChevronRight,
   FileBarChart,
+  Bot,
 } from 'lucide-react'
 import { useStore, type PacketStatus, type BoardPacketContent } from '@/lib/store'
 import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, labelFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
@@ -107,16 +108,39 @@ export default function BoardPacketPage() {
     setActiveMonth,
     isLoaded,
     schoolContextEntries,
+    agentFindings,
+    schoolId,
   } = useStore()
 
   const printRef = useRef<HTMLDivElement>(null)
   const [genState, setGenState] = useState<'idle' | 'generating' | 'error'>('idle')
   const [genError, setGenError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [boardPrepRunning, setBoardPrepRunning] = useState(false)
+  const boardPrepTriggered = useRef(false)
 
   // Editing state: 'narrative' | 'cashFlow' | `variance-${category}` | null
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editBuffer, setEditBuffer] = useState('')
+
+  // Auto-trigger board-prep agent when meeting is within 10 days
+  useEffect(() => {
+    if (boardPrepTriggered.current) return
+    if (!schoolId || !schoolProfile.nextBoardMeeting) return
+
+    const meetingDate = new Date(schoolProfile.nextBoardMeeting + 'T12:00:00')
+    const today = new Date()
+    today.setHours(12, 0, 0, 0)
+    const daysUntilMeeting = Math.round((meetingDate.getTime() - today.getTime()) / 86_400_000)
+
+    if (daysUntilMeeting >= 0 && daysUntilMeeting <= 10) {
+      boardPrepTriggered.current = true
+      setBoardPrepRunning(true)
+      fetch(`/api/agents/board-prep?schoolId=${schoolId}&nextBoardMeeting=${schoolProfile.nextBoardMeeting}&schoolName=${encodeURIComponent(schoolProfile.name)}`)
+        .then(() => setBoardPrepRunning(false))
+        .catch(() => setBoardPrepRunning(false))
+    }
+  }, [schoolId, schoolProfile.nextBoardMeeting, schoolProfile.name])
 
   if (!isLoaded && Object.keys(monthlySnapshots).length === 0) {
     return (
@@ -435,6 +459,41 @@ export default function BoardPacketPage() {
           )}
         </div>
       </div>
+
+      {/* Board Prep Agent Banner */}
+      {(boardPrepRunning || agentFindings.filter((f) => f.agentName === 'board_prep').length > 0) && (
+        <div className="ai-briefing px-5 py-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Bot size={15} style={{ color: 'var(--brand-500)' }} />
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--brand-500)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+              Board Prep Agent
+            </span>
+            {boardPrepRunning && (
+              <Loader2 size={13} className="animate-spin" style={{ color: 'var(--brand-400)' }} />
+            )}
+          </div>
+          {boardPrepRunning ? (
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Analyzing findings for upcoming board meeting...</p>
+          ) : (
+            <div className="space-y-2">
+              {agentFindings
+                .filter((f) => f.agentName === 'board_prep')
+                .map((f) => {
+                  const sev = { action: 'text-red-700', concern: 'text-orange-700', watch: 'text-amber-700', info: 'text-blue-700' }[f.severity] ?? 'text-gray-700'
+                  return (
+                    <div key={f.id} className="flex items-start gap-2">
+                      <span className={`text-xs font-semibold mt-0.5 uppercase ${sev}`}>{f.severity}</span>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{f.title}</p>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{f.summary}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Error banner */}
       {genError && (

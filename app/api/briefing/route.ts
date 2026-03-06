@@ -13,13 +13,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { schoolProfile, financialData, alerts, pacePercent, monthLabel, schoolContextEntries = [] } = body as {
+    const { schoolProfile, financialData, alerts, pacePercent, monthLabel, schoolContextEntries = [], agentFindings = [] } = body as {
       schoolProfile: Record<string, unknown>
       financialData: Record<string, unknown>
       alerts: unknown
       pacePercent: number
       monthLabel: string
       schoolContextEntries: ContextEntry[]
+      agentFindings: Array<{ agent_name: string; severity: string; title: string; summary: string }>
     }
 
     const spName = String(schoolProfile?.name ?? 'the school')
@@ -66,7 +67,7 @@ ${flagged.map((c) => {
 }).join('\n') || 'None'}
 
 ACTIVE ALERTS:
-${alertList.map((a) => `- [${String(a.severity ?? 'info').toUpperCase()}] ${String(a.message ?? '')}`).join('\n') || 'None'}${buildSchoolContextBlock(schoolContextEntries)}`
+${alertList.map((a) => `- [${String(a.severity ?? 'info').toUpperCase()}] ${String(a.message ?? '')}`).join('\n') || 'None'}${buildSchoolContextBlock(schoolContextEntries)}${agentFindings.length > 0 ? '\n\nSPECIALIST AGENT FINDINGS:\n' + agentFindings.map((f) => `- [${f.severity.toUpperCase()}] ${f.title}: ${f.summary}`).join('\n') : ''}`
 
     const response = await client.messages.create({
       model: CLAUDE_MODEL,

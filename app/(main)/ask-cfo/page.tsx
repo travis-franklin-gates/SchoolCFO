@@ -106,7 +106,7 @@ async function buildApiContent(file: File, userText: string): Promise<string | C
 }
 
 export default function AskCFOPage() {
-  const { chatMessages, addChatMessage, updateChatMessage, clearChat, schoolProfile, financialData, grants, alerts, otherGrants, activeMonth, schoolContextEntries } =
+  const { chatMessages, addChatMessage, updateChatMessage, clearChat, schoolProfile, financialData, grants, alerts, otherGrants, activeMonth, schoolContextEntries, agentFindings } =
     useStore()
 
   const [input, setInput] = useState('')
@@ -212,6 +212,13 @@ export default function AskCFOPage() {
           otherGrants,
           activeMonth,
           schoolContextEntries,
+          agentFindings: agentFindings.map((f) => ({
+            agent_name: f.agentName,
+            severity: f.severity,
+            title: f.title,
+            summary: f.summary,
+            finding_type: f.findingType,
+          })),
         }),
       })
 

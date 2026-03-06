@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Upload,
   ChevronRight,
+  Bot,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
@@ -73,6 +74,8 @@ export default function DashboardPage() {
     boardPackets,
     isLoaded,
     schoolContextEntries,
+    agentFindings,
+    lastAgentRunAt,
   } = useStore()
 
   const [briefing, setBriefing] = useState('')
@@ -107,7 +110,15 @@ export default function DashboardPage() {
         const res = await fetch('/api/briefing', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ schoolProfile, financialData, alerts, pacePercent, monthLabel, schoolContextEntries }),
+          body: JSON.stringify({
+            schoolProfile, financialData, alerts, pacePercent, monthLabel, schoolContextEntries,
+            agentFindings: agentFindings.map((f) => ({
+              agent_name: f.agentName.replace(/([A-Z])/g, '_$1').toLowerCase(),
+              severity: f.severity,
+              title: f.title,
+              summary: f.summary,
+            })),
+          }),
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const { briefing: text } = (await res.json()) as { briefing?: string }
@@ -485,6 +496,56 @@ export default function DashboardPage() {
               View all {alerts.length} alerts →
             </Link>
           )}
+        </div>
+      )}
+
+      {/* ── Agent Insights ────────────────────────────────────────────────── */}
+      {agentFindings.length > 0 && (
+        <div className="card-static p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Bot size={16} style={{ color: 'var(--brand-500)' }} />
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+                AI Agent Insights
+              </h2>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                {agentFindings.length}
+              </span>
+            </div>
+            {lastAgentRunAt && (
+              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                Last run: {new Date(lastAgentRunAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
+          <div className="space-y-2.5">
+            {agentFindings.slice(0, 6).map((finding) => {
+              const severityCfg = {
+                action: { badge: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
+                concern: { badge: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
+                watch: { badge: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500' },
+                info: { badge: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500' },
+              }[finding.severity] ?? { badge: 'bg-gray-100 text-gray-700', dot: 'bg-gray-400' }
+
+              const agentLabel = finding.agentName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+
+              return (
+                <div key={finding.id} className="flex items-start gap-3 py-2 border-b last:border-0" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${severityCfg.dot}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-medium text-gray-800">{finding.title}</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${severityCfg.badge}`}>
+                        {finding.severity}
+                      </span>
+                    </div>
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{finding.summary}</p>
+                    <span className="text-[10px] font-medium mt-0.5 inline-block" style={{ color: 'var(--text-tertiary)' }}>{agentLabel}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

@@ -126,6 +126,22 @@ export interface AuditChecklist {
   reviewerNote: string
 }
 
+export type AgentName = 'budget_analyst' | 'cash_sentinel' | 'grants_officer' | 'board_prep'
+export type FindingType = 'variance' | 'cash_risk' | 'grant_underspend' | 'grant_overspend' | 'braiding_opportunity' | 'board_action_required'
+export type FindingSeverity = 'info' | 'watch' | 'concern' | 'action'
+
+export interface AgentFinding {
+  id: string
+  agentName: AgentName
+  findingType: FindingType
+  severity: FindingSeverity
+  title: string
+  summary: string
+  detail: Record<string, unknown>
+  expiresAt: string | null
+  createdAt: string
+}
+
 interface AppState {
   // ── Auth / persistence ──
   schoolId: string | null
@@ -144,6 +160,8 @@ interface AppState {
   boardPackets: BoardPacket[]
   schoolContextEntries: SchoolContextEntry[]
   auditChecklists: AuditChecklist[]
+  agentFindings: AgentFinding[]
+  lastAgentRunAt: string | null
 
   // ── Actions ──
   setSchoolContext: (userId: string, schoolId: string) => void
@@ -173,6 +191,8 @@ interface AppState {
   removeSchoolContextEntry: (id: string) => void
   updateAuditChecklist: (category: string, checkedItems: string[], reviewerNote?: string) => void
   markAuditReviewed: (category: string) => void
+  setAgentFindings: (findings: AgentFinding[]) => void
+  setLastAgentRunAt: (ts: string) => void
 }
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
@@ -371,6 +391,8 @@ export const useStore = create<AppState>((set, get) => ({
   boardPackets: SEED_BOARD_PACKETS,
   schoolContextEntries: [],
   auditChecklists: [],
+  agentFindings: [],
+  lastAgentRunAt: null,
 
   // ── Auth actions ──
 
@@ -594,6 +616,33 @@ export const useStore = create<AppState>((set, get) => ({
           checkedItems: (r.checked_items as string[]) ?? [],
           reviewedAt: r.reviewed_at ?? null,
           reviewerNote: r.reviewer_note ?? '',
+        })),
+      })
+    }
+
+    // 7. Load agent findings (last 7 days, not expired)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: findingRows } = await supabase
+      .from('agent_findings')
+      .select('*')
+      .eq('school_id', schoolId)
+      .gte('created_at', sevenDaysAgo)
+      .or(`expires_at.is.null,expires_at.gte.${today}`)
+      .order('created_at', { ascending: false })
+
+    if (findingRows && findingRows.length > 0) {
+      set({
+        agentFindings: findingRows.map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          agentName: r.agent_name as AgentName,
+          findingType: r.finding_type as FindingType,
+          severity: r.severity as FindingSeverity,
+          title: r.title as string,
+          summary: r.summary as string,
+          detail: (r.detail as Record<string, unknown>) ?? {},
+          expiresAt: (r.expires_at as string) ?? null,
+          createdAt: r.created_at as string,
         })),
       })
     }
@@ -1201,4 +1250,7 @@ export const useStore = create<AppState>((set, get) => ({
       })
     }
   },
+
+  setAgentFindings: (findings) => set({ agentFindings: findings }),
+  setLastAgentRunAt: (ts) => set({ lastAgentRunAt: ts }),
 }))

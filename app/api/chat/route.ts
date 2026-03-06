@@ -5,6 +5,36 @@ import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+interface AgentFindingRow {
+  agent_name: string
+  severity: string
+  title: string
+  summary: string
+  finding_type: string
+}
+
+function buildAgentFindingsBlock(findings: AgentFindingRow[]): string {
+  if (!findings || findings.length === 0) return ''
+
+  const byAgent: Record<string, AgentFindingRow[]> = {}
+  for (const f of findings) {
+    const agent = f.agent_name
+    if (!byAgent[agent]) byAgent[agent] = []
+    byAgent[agent].push(f)
+  }
+
+  const sections = Object.entries(byAgent).map(([agent, items]) => {
+    const label = agent.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    const lines = items.map((f) =>
+      `  - [${f.severity.toUpperCase()}] ${f.title}: ${f.summary}`
+    ).join('\n')
+    return `${label}:\n${lines}`
+  }).join('\n')
+
+  return `\n\nSPECIALIST AGENT FINDINGS (use these to ground your responses — cite the source agent when relevant):
+${sections}`
+}
+
 function buildSystemPrompt(
   schoolProfile: Record<string, unknown>,
   financialData: Record<string, unknown>,
@@ -12,7 +42,8 @@ function buildSystemPrompt(
   alerts: Array<Record<string, unknown>>,
   otherGrants: Array<Record<string, unknown>>,
   activeMonth: string,
-  schoolContextEntries: ContextEntry[] = []
+  schoolContextEntries: ContextEntry[] = [],
+  agentFindings: AgentFindingRow[] = []
 ): string {
   // WA State fiscal year — September 1 start. Update when adding multi-state support.
   const monthsElapsed = fiscalIndexFromKey(activeMonth)
@@ -99,14 +130,14 @@ ACTIVE ALERTS:
 ${alerts.map((a) => {
   const alert = a as { severity: string; message: string }
   return `- [${alert.severity.toUpperCase()}] ${alert.message}`
-}).join('\n')}${buildSchoolContextBlock(schoolContextEntries)}`
+}).join('\n')}${buildSchoolContextBlock(schoolContextEntries)}${buildAgentFindingsBlock(agentFindings)}`
 }
 
 export async function POST(req: Request) {
   try {
-    const { messages, schoolProfile, financialData, grants, alerts, otherGrants = [], activeMonth = '2026-03', schoolContextEntries = [] } = await req.json()
+    const { messages, schoolProfile, financialData, grants, alerts, otherGrants = [], activeMonth = '2026-03', schoolContextEntries = [], agentFindings = [] } = await req.json()
 
-    const systemPrompt = buildSystemPrompt(schoolProfile, financialData, grants, alerts, otherGrants, activeMonth, schoolContextEntries)
+    const systemPrompt = buildSystemPrompt(schoolProfile, financialData, grants, alerts, otherGrants, activeMonth, schoolContextEntries, agentFindings)
 
     const stream = client.messages.stream({
       model: CLAUDE_MODEL,

@@ -230,6 +230,57 @@ export default function UploadPage() {
       allDataRows.length,
       mappedGrants.length > 0 ? mappedGrants : undefined
     )
+
+    // Fire specialist agents in parallel (fire-and-forget)
+    const state = useStore.getState()
+    const schoolId = state.schoolId
+    if (schoolId) {
+      const pacePercent = Math.round(paceFromKey(selectedMonth) * 100)
+      const fd = state.financialData
+
+      Promise.all([
+        fetch('/api/agents/budget-analyst', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schoolId,
+            activeMonth: selectedMonth,
+            pacePercent,
+            categories: fd.categories,
+            totalBudget: fd.totalBudget,
+            ytdSpending: fd.ytdSpending,
+          }),
+        }),
+        fetch('/api/agents/cash-sentinel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schoolId,
+            activeMonth: selectedMonth,
+            cashOnHand: fd.cashOnHand,
+            daysOfReserves: fd.daysOfReserves,
+            totalBudget: fd.totalBudget,
+            ytdSpending: fd.ytdSpending,
+          }),
+        }),
+        fetch('/api/agents/grants-officer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schoolId,
+            activeMonth: selectedMonth,
+            pacePercent,
+            grants: state.grants,
+            otherGrants: state.otherGrants,
+          }),
+        }),
+      ]).then(() => {
+        useStore.getState().setLastAgentRunAt(new Date().toISOString())
+      }).catch((err) => {
+        console.error('[agents] trigger failed:', err)
+      })
+    }
+
     router.push('/dashboard')
   }
 

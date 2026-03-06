@@ -7,7 +7,7 @@ import {
   Users,
   DollarSign,
   BookOpen,
-  Building2,
+  CreditCard,
   Shield,
   Loader2,
   Download,
@@ -15,12 +15,17 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Upload,
+  Landmark,
+  Package,
+  ExternalLink,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
-import { labelFromKey, paceFromKey } from '@/lib/fiscalYear'
+import { labelFromKey } from '@/lib/fiscalYear'
+import { getChecklistItemDetail } from '@/lib/auditChecklistDetails'
 
-// ── Audit category definitions ───────────────────────────────────────────────
+// ── SAO Charter School Audit Categories ──────────────────────────────────────
 
 interface AuditCategory {
   key: string
@@ -32,81 +37,107 @@ interface AuditCategory {
 
 const AUDIT_CATEGORIES: AuditCategory[] = [
   {
-    key: 'warrant_approval',
-    label: 'Warrant Approval',
-    icon: FileCheck,
-    description: 'Board approval of accounts payable and payroll warrants before payment processing',
+    key: 'staff_certification',
+    label: 'Staff Certification Compliance',
+    icon: Users,
+    description: 'All instructional staff hold current WA teaching certificates or OSPI-issued permits per RCW 28A.410 and WAC 181-79A',
     checklistItems: [
-      'All AP warrants have board approval documented in minutes',
-      'Payroll warrants are pre-approved per board policy',
+      'All instructional staff hold current WA teaching certificates or OSPI-issued permits',
+      'S-275 personnel report accurately reflects staff certification status',
+      'Special education staff hold valid SpEd endorsements or pre-endorsement authorization',
+      'All instructional staff contracts have been approved by the Board',
+      'Paraeducator certificates are current per HB 1115 requirements',
+    ],
+  },
+  {
+    key: 'enrollment_reporting',
+    label: 'Enrollment Reporting Accuracy',
+    icon: BookOpen,
+    description: 'Student enrollment counts, CEDARS reporting, and special education documentation per WAC 392-121',
+    checklistItems: [
+      'Student enrollment count date documentation is complete for each month',
+      'Special education students have current IEPs and evaluations on file',
+      'Special ed students received services on or before each monthly count date',
+      'CEDARS enrollment data matches actual student roster',
+      'S-275 staff report matches actual employed staff',
+    ],
+  },
+  {
+    key: 'accounts_payable',
+    label: 'Accounts Payable Controls',
+    icon: CreditCard,
+    description: 'Disbursement documentation, credit card controls, and dual authorization per SAO best practices',
+    checklistItems: [
+      'All disbursements have documentation showing goods/services received before payment',
+      'Credit card purchases have receipts and business purpose documentation',
+      'Electronic funds transfers have dual authorization',
+      'No duplicate payments to vendors in current fiscal year',
+      'Vendor payments are timely (no late fees or finance charges)',
+    ],
+  },
+  {
+    key: 'warrant_approval',
+    label: 'Warrant Approval Compliance',
+    icon: FileCheck,
+    description: 'Board approval of AP and payroll warrants per RCW 42.24.080 and RCW 42.24.090',
+    checklistItems: [
+      'AP warrants approved by board monthly per RCW 42.24.080',
+      'Payroll warrants approved by board monthly per RCW 42.24.090',
+      'Warrant documentation includes voucher numbers and vendor names',
       'Warrant register is maintained with sequential numbering',
-      'Void warrants are documented with reason',
-      'Bank reconciliation completed monthly',
+      'Void warrants are documented with reason and board notification',
     ],
   },
   {
     key: 'categorical_fund',
     label: 'Categorical Fund Compliance',
     icon: DollarSign,
-    description: 'Proper segregation and use of categorical (restricted) funds per state/federal rules',
+    description: 'Proper segregation and use of categorical (restricted) funds per state and federal requirements',
     checklistItems: [
-      'Categorical funds tracked in separate accounts',
-      'Expenditures match approved fund purposes',
+      'Categorical funds tracked in separate accounts per OSPI fund accounting',
+      'Expenditures match approved fund purposes and grant agreements',
       'No commingling of categorical and general funds',
-      'Quarterly spending reports filed on time',
-      'Carryover amounts documented and approved',
+      'Quarterly spending reports filed on time with OSPI',
+      'Carryover amounts documented and approved by grantor',
     ],
   },
   {
-    key: 'time_effort',
-    label: 'Time & Effort Documentation',
-    icon: Users,
-    description: 'Personnel activity reports for staff paid from multiple funding sources',
-    checklistItems: [
-      'Semi-annual certifications completed for single-cost objective staff',
-      'Monthly PARs completed for split-funded staff',
-      'Time & effort records match payroll distribution',
-      'Supervisor signatures on all certifications',
-      'Adjustments made for actual vs. budgeted time',
-    ],
-  },
-  {
-    key: 'cash_management',
-    label: 'Cash Management',
-    icon: Building2,
-    description: 'Cash handling, deposits, reserves, and investment practices',
-    checklistItems: [
-      'Cash receipts deposited within 24 hours',
-      'Petty cash fund reconciled monthly',
-      'Bank statements reconciled within 30 days',
-      'Reserve fund meets minimum days requirement',
-      'Investment policy on file and followed',
-    ],
-  },
-  {
-    key: 'cedars',
-    label: 'CEDARS Reporting',
-    icon: BookOpen,
-    description: 'Comprehensive Education Data and Research System — state enrollment and program reporting',
-    checklistItems: [
-      'Student enrollment counts verified monthly',
-      'Program participation data current and accurate',
-      'Staff FTE data matches payroll records',
-      'Submission deadlines met for all windows',
-      'Error reports reviewed and resolved',
-    ],
-  },
-  {
-    key: 'board_governance',
-    label: 'Board Governance',
+    key: 'open_meetings',
+    label: 'Open Public Meetings Act & Board Governance',
     icon: Shield,
-    description: 'Board financial oversight, policies, and required approvals',
+    description: 'OPMA compliance per RCW 42.30, board financial oversight, and required approvals',
     checklistItems: [
-      'Annual budget adopted by board resolution',
-      'Monthly financial reports presented to board',
-      'Board-approved fiscal policies current (within 2 years)',
-      'Conflict of interest disclosures on file',
-      'Board minutes document all financial votes',
+      'Board meeting minutes are complete and approved for all meetings this fiscal year',
+      'Meeting agendas were posted at least 24 hours in advance per RCW 42.30.077',
+      'Executive sessions were properly noticed with specific statutory authority cited',
+      'Conflict of interest disclosures are current for all board members',
+      'Board has approved all employment contracts for instructional staff',
+    ],
+  },
+  {
+    key: 'separation_public_private',
+    label: 'Separation of Public & Private Activities',
+    icon: Landmark,
+    description: 'Public funds, assets, and activities are separate from any private or organizational interests',
+    checklistItems: [
+      'School bank accounts are separate from any private or organizational accounts',
+      'Fundraising revenue is properly tracked and deposited to school accounts',
+      'School assets are not commingled with private assets',
+      'Public records requests have been properly responded to within statutory timeframes',
+      'Management company or CMO transactions are at arms-length with board approval',
+    ],
+  },
+  {
+    key: 'asset_tracking',
+    label: 'Theft-Sensitive Asset Tracking',
+    icon: Package,
+    description: 'Inventory and safeguarding of computers, electronics, and other theft-sensitive assets per SAO guidelines',
+    checklistItems: [
+      'Inventory of computers, tablets, and electronic equipment is current',
+      'All assets over $500 are tagged and tracked in an asset management system',
+      'Annual physical inventory has been completed and reconciled',
+      'Surplus or disposed assets are documented with board approval',
+      'Staff-assigned devices have signed checkout agreements on file',
     ],
   },
 ]
@@ -134,12 +165,6 @@ const STATUS_CFG: Record<ReadinessStatus, { label: string; cls: string }> = {
   'not-reviewed': { label: 'Not Reviewed', cls: 'bg-gray-100 text-gray-600' },
 }
 
-function fmt(n: number) {
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
-  if (Math.abs(n) >= 1_000) return `$${Math.round(n / 1_000)}K`
-  return `$${n.toLocaleString()}`
-}
-
 // ── Report types ─────────────────────────────────────────────────────────────
 
 interface AuditReport {
@@ -152,6 +177,77 @@ interface AuditReport {
   }[]
   priorityActions: string[]
   timelineRecommendation: string
+}
+
+// ── Detail panel component ───────────────────────────────────────────────────
+
+function ItemDetailPanel({ itemText }: { itemText: string }) {
+  const detail = getChecklistItemDetail(itemText)
+  if (!detail) return null
+
+  return (
+    <div className="bg-blue-50/60 border-l-4 border-l-blue-400 rounded-r-lg ml-7 mb-1 overflow-hidden animate-[slideDown_200ms_ease-out]">
+      <div className="p-4 space-y-4">
+        {/* Why It Matters */}
+        <div>
+          <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">
+            Why It Matters
+          </h5>
+          <p className="text-sm text-blue-900 leading-relaxed">{detail.whyItMatters}</p>
+        </div>
+
+        {/* How to Comply */}
+        <div>
+          <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">
+            How to Comply
+          </h5>
+          <ol className="list-decimal list-inside space-y-1">
+            {detail.howToComply.map((step, i) => (
+              <li key={i} className="text-sm text-blue-900 leading-relaxed">{step}</li>
+            ))}
+          </ol>
+        </div>
+
+        {/* What to Have Ready */}
+        <div>
+          <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">
+            What to Have Ready
+          </h5>
+          <ul className="space-y-1">
+            {detail.whatToHaveReady.map((doc, i) => (
+              <li key={i} className="text-sm text-blue-900 leading-relaxed flex items-start gap-2">
+                <span className="text-blue-400 mt-1.5 shrink-0">&#8226;</span>
+                {doc}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Resources */}
+        {detail.resources.length > 0 && (
+          <div>
+            <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1.5">
+              Resources
+            </h5>
+            <div className="flex flex-wrap gap-2">
+              {detail.resources.map((res, i) => (
+                <a
+                  key={i}
+                  href={res.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-white/80 border border-blue-200 rounded-lg text-blue-700 hover:bg-white hover:border-blue-300 transition-colors"
+                >
+                  <ExternalLink size={10} className="shrink-0" />
+                  {res.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -172,6 +268,7 @@ export default function AuditPrepPage() {
 
   const printRef = useRef<HTMLDivElement>(null)
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null)
+  const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const [report, setReport] = useState<AuditReport | null>(null)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
@@ -234,6 +331,10 @@ export default function AuditPrepPage() {
   const handleNoteChange = (categoryKey: string, note: string) => {
     const cl = getChecklist(categoryKey)
     updateAuditChecklist(categoryKey, cl.checkedItems, note)
+  }
+
+  const toggleItemDetail = (itemText: string) => {
+    setExpandedItem((prev) => (prev === itemText ? null : itemText))
   }
 
   // ── Overall readiness ──────────────────────────────────────────────────────
@@ -319,7 +420,7 @@ export default function AuditPrepPage() {
         pdf.setFontSize(7.5)
         pdf.setTextColor(150, 150, 150)
         pdf.text(
-          `${schoolProfile.name}  ·  Audit Readiness Report  ·  ${monthLabel}`,
+          `${schoolProfile.name}  ·  SAO Audit Readiness Report  ·  ${monthLabel}`,
           MARGIN, MARGIN + 14
         )
         pdf.setDrawColor(220, 220, 220)
@@ -350,7 +451,7 @@ export default function AuditPrepPage() {
         }
       }
 
-      pdf.save(`${schoolProfile.name.replace(/\s+/g, '_')}_Audit_Report_${activeMonth}.pdf`)
+      pdf.save(`${schoolProfile.name.replace(/\s+/g, '_')}_SAO_Audit_Report_${activeMonth}.pdf`)
     } catch (err) {
       console.error('PDF export error:', err)
     } finally {
@@ -370,7 +471,7 @@ export default function AuditPrepPage() {
             Audit Prep
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
-            Review readiness across 6 audit areas and generate a comprehensive report
+            WA State Auditor&apos;s Office charter school accountability audit areas
           </p>
         </div>
         <div className="flex gap-2">
@@ -403,6 +504,12 @@ export default function AuditPrepPage() {
           {genError}
         </div>
       )}
+
+      {/* SAO context banner */}
+      <div className="p-3.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-xs leading-relaxed">
+        Based on WA State Auditor&apos;s Office published charter school accountability audit focus areas.
+        Click any checklist item to see detailed guidance on why it matters, how to comply, and what documentation to have ready.
+      </div>
 
       {/* Readiness Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -474,7 +581,6 @@ export default function AuditPrepPage() {
                   <span className="text-xs font-medium text-gray-500">
                     {checkedCount}/{cat.checklistItems.length}
                   </span>
-                  {/* Mini progress bar */}
                   <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden hidden sm:block">
                     <div
                       className="h-full rounded-full transition-all"
@@ -490,26 +596,54 @@ export default function AuditPrepPage() {
 
               {/* Expanded checklist */}
               {expanded && (
-                <div className="border-t border-gray-100 px-5 py-4 space-y-3">
+                <div className="border-t border-gray-100 px-5 py-4 space-y-1">
                   {cat.checklistItems.map((item) => {
                     const checked = cl.checkedItems.includes(item)
+                    const isDetailOpen = expandedItem === item
+                    const hasDetail = !!getChecklistItemDetail(item)
+
                     return (
-                      <label key={item} className="flex items-start gap-3 cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleItem(cat.key, item)}
-                          className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1e3a5f] focus:ring-[#1e3a5f]/20"
-                        />
-                        <span className={`text-sm ${checked ? 'text-gray-500 line-through' : 'text-gray-700'} group-hover:text-gray-900 transition-colors`}>
-                          {item}
-                        </span>
-                      </label>
+                      <div key={item}>
+                        {/* Checklist row */}
+                        <div className="flex items-start gap-3 py-2 group">
+                          {/* Checkbox — stops propagation so clicking it doesn't toggle the detail */}
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleItem(cat.key, item)}
+                            className="mt-1 w-4 h-4 rounded border-gray-300 text-[#1e3a5f] focus:ring-[#1e3a5f]/20 cursor-pointer shrink-0"
+                          />
+                          {/* Clickable label area — toggles detail panel */}
+                          <button
+                            onClick={() => hasDetail && toggleItemDetail(item)}
+                            className={`flex-1 text-left flex items-start gap-2 ${hasDetail ? 'cursor-pointer' : 'cursor-default'}`}
+                          >
+                            <span className={`text-sm leading-relaxed ${checked ? 'text-gray-400 line-through' : 'text-gray-700'} ${hasDetail ? 'group-hover:text-gray-900' : ''} transition-colors`}>
+                              {item}
+                            </span>
+                          </button>
+                          {/* Chevron indicator */}
+                          {hasDetail && (
+                            <button
+                              onClick={() => toggleItemDetail(item)}
+                              className="mt-0.5 shrink-0 text-gray-300 hover:text-blue-500 transition-all"
+                            >
+                              <ChevronRight
+                                size={14}
+                                className={`transition-transform duration-200 ${isDetailOpen ? 'rotate-90' : ''}`}
+                              />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Detail panel */}
+                        {isDetailOpen && <ItemDetailPanel itemText={item} />}
+                      </div>
                     )
                   })}
 
                   {/* Reviewer note */}
-                  <div className="pt-2">
+                  <div className="pt-3">
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">
                       Reviewer Notes
                     </label>
@@ -558,12 +692,14 @@ export default function AuditPrepPage() {
       {report && (
         <div ref={printRef} className="space-y-6">
           <div className="card-static p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4"
+            <h2 className="text-lg font-semibold text-gray-800 mb-1"
               style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
-              Audit Readiness Report — {monthLabel}
+              SAO Audit Readiness Report — {monthLabel}
             </h2>
+            <p className="text-xs text-gray-400 mb-5">
+              Based on WA State Auditor&apos;s Office charter school accountability audit framework
+            </p>
 
-            {/* Executive Summary */}
             <div className="mb-6">
               <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                 Executive Summary
@@ -573,7 +709,6 @@ export default function AuditPrepPage() {
               </div>
             </div>
 
-            {/* Priority Actions */}
             {report.priorityActions.length > 0 && (
               <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                 <h3 className="text-sm font-semibold text-amber-800 mb-2 flex items-center gap-2">
@@ -588,10 +723,9 @@ export default function AuditPrepPage() {
               </div>
             )}
 
-            {/* Category Findings */}
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                Findings by Area
+                Findings by Audit Area
               </h3>
               {report.categoryFindings.map((finding) => {
                 const statusCls = finding.status === 'ready'
@@ -626,7 +760,6 @@ export default function AuditPrepPage() {
               })}
             </div>
 
-            {/* Timeline */}
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <h3 className="text-sm font-semibold text-blue-800 mb-2">
                 Timeline Recommendation

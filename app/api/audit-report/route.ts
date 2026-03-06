@@ -56,7 +56,9 @@ export async function POST(req: NextRequest) {
       })
       .join('\n')
 
-    const prompt = `You are generating a comprehensive audit readiness report for ${schoolName}, a Washington state charter school.
+    const prompt = `You are generating a comprehensive audit readiness report for ${schoolName}, a Washington state charter school, aligned with the WA State Auditor's Office (SAO) charter school accountability audit framework.
+
+The SAO conducts accountability audits of charter schools focusing on: staff certification compliance, enrollment reporting accuracy, accounts payable controls, warrant approval compliance, categorical fund compliance, Open Public Meetings Act & board governance, separation of public and private activities, and theft-sensitive asset tracking. Reference specific RCWs and WACs where relevant (RCW 42.24.080/090 for warrants, RCW 42.30 for OPMA, RCW 28A.710 for charter schools, WAC 392-121 for enrollment).
 
 Financial snapshot as of ${monthLabel}:
 - Annual budget: $${totalBudget.toLocaleString()}
@@ -80,27 +82,37 @@ ${buildSchoolContextBlock(schoolContextEntries as ContextEntry[])}
 Generate an audit readiness report. Return a JSON object with exactly these keys. No other text, no markdown fences — just raw JSON:
 
 {
-  "executiveSummary": "2-3 paragraphs assessing overall audit readiness. Be specific about strengths and gaps. Reference WA state charter school audit requirements. Tone: professional, actionable, direct.",
+  "executiveSummary": "2-3 paragraphs assessing overall audit readiness for a WA SAO accountability audit. Be specific about strengths and gaps. Reference applicable RCWs and WACs. Note that staff certification is historically the highest-risk area for WA charter schools. Tone: professional, actionable, direct.",
 
   "categoryFindings": [
     {
       "category": "CategoryName",
       "status": "ready|needs-attention|at-risk",
-      "findings": "2-3 sentences about what an auditor would find in this area. Reference specific data points.",
+      "findings": "2-3 sentences about what the SAO would find in this area. Reference specific data points and applicable statutes.",
       "recommendations": ["Specific action item 1", "Specific action item 2"]
     }
   ],
 
-  "priorityActions": ["Top priority action 1 with specific detail", "Top priority action 2", "Top priority action 3"],
+  "priorityActions": ["Top priority action 1 with specific detail and statute reference", "Top priority action 2", "Top priority action 3"],
 
-  "timelineRecommendation": "2-3 sentences about when to address the most critical items before the next audit cycle. Be specific about deadlines."
+  "timelineRecommendation": "2-3 sentences about when to address the most critical items before the next SAO audit cycle. Reference typical SAO audit timing for charter schools."
 }
 
-The categoryFindings should cover these 6 audit areas: Warrant Approval, Categorical Fund Compliance, Time & Effort Documentation, Cash Management, CEDARS Reporting, Board Governance. Base findings on the actual financial data provided.`
+The categoryFindings MUST cover exactly these 8 SAO audit areas in this order:
+1. Staff Certification Compliance
+2. Enrollment Reporting Accuracy
+3. Accounts Payable Controls
+4. Warrant Approval Compliance
+5. Categorical Fund Compliance
+6. Open Public Meetings Act & Board Governance
+7. Separation of Public & Private Activities
+8. Theft-Sensitive Asset Tracking
+
+Base findings on the actual financial data provided. Where data is limited, note what documentation the school should prepare.`
 
     const message = await client.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 4000,
+      max_tokens: 5000,
       messages: [{ role: 'user', content: prompt }],
     })
 

@@ -57,7 +57,7 @@ const CHECKLIST_DETAILS: Record<string, ChecklistItemDetail> = {
       'Correction documentation if any amendments were filed after initial submission',
     ],
     resources: [
-      { label: 'OSPI S-275 Staff Reporting (SAFS)', url: 'https://www.k12.wa.us/safs/' },
+      { label: 'OSPI S-275 Staff Reporting', url: 'https://ospi.k12.wa.us/data-reporting/reporting/staff' },
       { label: 'OSPI E-Certification Lookup', url: 'https://eds.ospi.k12.wa.us/' },
     ],
   },
@@ -122,7 +122,7 @@ const CHECKLIST_DETAILS: Record<string, ChecklistItemDetail> = {
     ],
     resources: [
       { label: 'OSPI E-Certification Lookup', url: 'https://eds.ospi.k12.wa.us/' },
-      { label: 'OSPI Paraeducator Program', url: 'https://ospi.k12.wa.us/certification/paraeducator-certificate' },
+      { label: 'OSPI Paraeducator Requirements', url: 'https://ospi.k12.wa.us/educator-support/educator-certification/paraeducators' },
     ],
   },
 
@@ -149,7 +149,7 @@ const CHECKLIST_DETAILS: Record<string, ChecklistItemDetail> = {
     ],
     resources: [
       { label: 'WAC 392-121 — Enrollment Counting', url: 'https://app.leg.wa.gov/wac/default.aspx?cite=392-121' },
-      { label: 'OSPI CEDARS Reporting', url: 'https://ospi.k12.wa.us/data-reporting/reporting/cedars' },
+      { label: 'OSPI CEDARS Reporting', url: 'https://ospi.k12.wa.us/data-reporting/reporting' },
     ],
   },
 
@@ -213,7 +213,7 @@ const CHECKLIST_DETAILS: Record<string, ChecklistItemDetail> = {
       'Documentation of CEDARS corrections made during the year',
     ],
     resources: [
-      { label: 'OSPI CEDARS Reporting', url: 'https://ospi.k12.wa.us/data-reporting/reporting/cedars' },
+      { label: 'OSPI CEDARS Reporting', url: 'https://ospi.k12.wa.us/data-reporting/reporting' },
       { label: 'WA Charter School Commission — Oversight', url: 'https://charterschool.wa.gov/oversight-accountability/' },
     ],
   },
@@ -234,7 +234,7 @@ const CHECKLIST_DETAILS: Record<string, ChecklistItemDetail> = {
       'Documentation of any mid-year staffing changes with effective dates',
     ],
     resources: [
-      { label: 'OSPI S-275 Staff Reporting (SAFS)', url: 'https://www.k12.wa.us/safs/' },
+      { label: 'OSPI S-275 Staff Reporting', url: 'https://ospi.k12.wa.us/data-reporting/reporting/staff' },
       { label: 'OSPI E-Certification Lookup', url: 'https://eds.ospi.k12.wa.us/' },
     ],
   },
@@ -472,7 +472,7 @@ const CHECKLIST_DETAILS: Record<string, ChecklistItemDetail> = {
       'OSPI grant award letters matched to fund codes in your system',
     ],
     resources: [
-      { label: 'OSPI S-275 / SAFS Resources', url: 'https://www.k12.wa.us/safs/' },
+      { label: 'OSPI S-275 Staff Reporting', url: 'https://ospi.k12.wa.us/data-reporting/reporting/staff' },
       { label: 'OSPI Accounting Manual', url: 'https://ospi.k12.wa.us/policy-funding/school-apportionment/school-apportionment-and-financial-services' },
     ],
   },
@@ -820,7 +820,7 @@ const CHECKLIST_DETAILS: Record<string, ChecklistItemDetail> = {
     ],
     resources: [
       { label: 'SAO Best Practices — Asset Management', url: 'https://portal.sao.wa.gov/ReportSearch' },
-      { label: 'GASB 34 Capital Asset Reporting', url: 'https://gasb.org/page/PageContent?pageId=/standards-guidance/pronouncements/summary--statement-no-34.html' },
+      { label: 'SAO Local Government Audits', url: 'https://sao.wa.gov/about-audits/about-local-government-audits' },
     ],
   },
 

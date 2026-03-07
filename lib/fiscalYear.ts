@@ -80,3 +80,36 @@ export const OSPI_PCT: Record<string, number> = {
 
 /** Safety fallback for months not in OSPI_PCT (should never be reached). */
 export const DEFAULT_OSPI_PCT = 8.33
+
+/**
+ * Cumulative OSPI apportionment % received through the end of `monthKey`.
+ * E.g. through October (fiscal month 2): Sep 9% + Oct 8% = 17%.
+ */
+export function cumulativeOspiPct(monthKey: string): number {
+  const fiscalIdx = fiscalIndexFromKey(monthKey)
+  // Fiscal months in calendar order: Sep, Oct, Nov, Dec, Jan, Feb, Mar, Apr, May, Jun, Jul, Aug
+  const fiscalOrder = ['09', '10', '11', '12', '01', '02', '03', '04', '05', '06', '07', '08']
+  let total = 0
+  for (let i = 0; i < fiscalIdx; i++) {
+    total += OSPI_PCT[fiscalOrder[i]] ?? DEFAULT_OSPI_PCT
+  }
+  return total
+}
+
+/**
+ * Calculate dynamic cash position for a given month.
+ * cash = openingCash + (annualBudget * cumulativeOspiPct/100) - ytdSpending
+ * Returns { cashOnHand, daysOfReserves }.
+ */
+export function calculateCashPosition(
+  openingCash: number,
+  annualBudget: number,
+  ytdSpending: number,
+  monthKey: string
+): { cashOnHand: number; daysOfReserves: number } {
+  const revenueReceived = annualBudget * (cumulativeOspiPct(monthKey) / 100)
+  const cashOnHand = Math.round(openingCash + revenueReceived - ytdSpending)
+  const dailyBurn = annualBudget > 0 ? annualBudget / 365 : 1
+  const daysOfReserves = dailyBurn > 0 ? Math.round(cashOnHand / dailyBurn) : 0
+  return { cashOnHand, daysOfReserves }
+}

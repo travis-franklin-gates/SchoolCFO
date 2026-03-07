@@ -1,9 +1,9 @@
-Grant Name,Award Amount,Grant Spent to Date,Category,Annual Budget,YTD Actuals
-Title I Part A,198000,128000,Personnel,3100000,2294000
-IDEA / Special Education,112000,55000,Benefits,620000,440200
-LAP,89000,58000,Contracted Services,485000,383150
-TBIP,67000,44000,Supplies,198000,160380
-HiCap,28000,17000,Facilities,312000,202800
-ELL,22000,14000,Transportation,148000,90280
-,,,Food Services,185000,116550
-,,,Administrative,102000,59160
+Grant Name,Award Amount,Grant Spent to Date,Account Type,Category,Annual Budget,YTD Actuals
+Title I Part A,198000,128000,Expense,Personnel,3100000,2294000
+IDEA / Special Education,112000,55000,Expense,Benefits,620000,440200
+LAP,89000,58000,Expense,Contracted Services,485000,383150
+TBIP,67000,44000,Expense,Supplies,198000,160380
+HiCap,28000,17000,Expense,Facilities,312000,202800
+ELL,22000,14000,Expense,Transportation,148000,90280
+,,,Expense,Food Services,185000,116550
+,,,Expense,Administrative,102000,59160

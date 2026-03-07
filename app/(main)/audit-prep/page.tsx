@@ -420,18 +420,46 @@ export default function AuditPrepPage() {
         const now = new Date().toISOString()
         setAuditMeta({ lastRun: now, score: readiness.score, grade: readiness.grade })
 
+        // Persist coordinator output to agent_findings
+        const { supabase } = await import('@/lib/supabase')
+
+        // Delete old coordinator finding, then insert new one
+        await supabase
+          .from('agent_findings')
+          .delete()
+          .eq('school_id', schoolId)
+          .eq('agent_name', 'audit_coordinator')
+
+        await supabase.from('agent_findings').insert({
+          school_id: schoolId,
+          agent_name: 'audit_coordinator',
+          finding_type: 'audit_verified',
+          severity: 'info',
+          title: `Readiness Assessment: ${readiness.grade} (${readiness.score}/100)`,
+          summary: readiness.executiveSummary,
+          detail: {
+            score: readiness.score,
+            grade: readiness.grade,
+            priorityActions: readiness.priorityActions,
+            executiveSummary: readiness.executiveSummary,
+            categoryStatus: readiness.categoryStatus,
+            estimatedTimeToReady: readiness.estimatedTimeToReady,
+          },
+          expires_at: null,
+        })
+
         // Refresh agent findings in store
-        const { data: freshFindings } = await (await import('@/lib/supabase')).supabase
+        const { data: freshFindings } = await supabase
           .from('agent_findings')
           .select('*')
           .eq('school_id', schoolId)
-          .in('agent_name', ['audit_compliance', 'audit_federal'])
+          .in('agent_name', ['audit_compliance', 'audit_federal', 'audit_coordinator'])
           .order('created_at', { ascending: false })
 
         if (freshFindings) {
           // Merge with existing non-audit findings
           const nonAuditFindings = agentFindings.filter(
-            (f) => f.agentName !== 'audit_compliance' && f.agentName !== 'audit_federal'
+            (f) => f.agentName !== 'audit_compliance' && f.agentName !== 'audit_federal' && f.agentName !== 'audit_coordinator'
           )
           setAgentFindings([
             ...nonAuditFindings,
@@ -468,12 +496,16 @@ export default function AuditPrepPage() {
   }, [isLoaded, hasData, schoolId, auditAgentsLastRun, runAuditAgents])
 
   // Load cached compliance data from agent_findings when baseline exists (no agent run needed)
+  const hasCacheLoaded = useRef(false)
   useEffect(() => {
-    if (!isLoaded || !schoolId || !auditAgentsLastRun || complianceItems.length > 0) return
+    if (hasCacheLoaded.current || !isLoaded || !schoolId || !auditAgentsLastRun) return
+    if (agentFindings.length === 0) return // Store hasn't loaded findings yet
+
+    hasCacheLoaded.current = true
 
     // Populate compliance items from cached agent_findings
     const auditFindings = agentFindings.filter((f) => f.agentName === 'audit_compliance')
-    if (auditFindings.length > 0) {
+    if (auditFindings.length > 0 && complianceItems.length === 0) {
       const items: ComplianceItem[] = auditFindings.map((f) => ({
         item: f.title,
         category: (f.detail?.category as string) ?? '',
@@ -483,9 +515,21 @@ export default function AuditPrepPage() {
       setComplianceItems(items)
     }
 
-    // Populate cached assessment from store meta
-    if (auditReadinessScore != null && auditReadinessGrade) {
-      setAssessment((prev) => prev ?? {
+    // Populate cached assessment from coordinator finding
+    const coordFinding = agentFindings.find((f) => f.agentName === 'audit_coordinator')
+    if (coordFinding && !assessment) {
+      const d = coordFinding.detail
+      setAssessment({
+        score: (d.score as number) ?? auditReadinessScore ?? 0,
+        grade: (d.grade as string) ?? auditReadinessGrade ?? 'F',
+        priorityActions: (d.priorityActions as ReadinessAssessment['priorityActions']) ?? [],
+        executiveSummary: (d.executiveSummary as string) ?? coordFinding.summary ?? '',
+        categoryStatus: (d.categoryStatus as ReadinessAssessment['categoryStatus']) ?? [],
+        estimatedTimeToReady: (d.estimatedTimeToReady as string) ?? '',
+      })
+    } else if (!coordFinding && auditReadinessScore != null && auditReadinessGrade && !assessment) {
+      // Fallback: no coordinator finding but we have score/grade from schools table
+      setAssessment({
         score: auditReadinessScore,
         grade: auditReadinessGrade,
         priorityActions: [],
@@ -494,7 +538,7 @@ export default function AuditPrepPage() {
         estimatedTimeToReady: '',
       })
     }
-  }, [isLoaded, schoolId, auditAgentsLastRun, agentFindings, complianceItems.length, auditReadinessScore, auditReadinessGrade])
+  }, [isLoaded, schoolId, auditAgentsLastRun, agentFindings, complianceItems.length, auditReadinessScore, auditReadinessGrade, assessment])
 
   // Stale data check (30+ days)
   const isStale = auditAgentsLastRun

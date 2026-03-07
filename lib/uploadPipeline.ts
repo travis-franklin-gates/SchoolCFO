@@ -5,6 +5,7 @@ export type SchoolCFOField =
   | 'budget'
   | 'ytdActuals'
   | 'fund'
+  | 'accountType'
   | 'grantName'
   | 'grantAmount'
   | 'grantSpent'
@@ -63,6 +64,12 @@ const FIELD_PATTERNS: Record<Exclude<SchoolCFOField, 'ignore'>, RegExp[]> = {
     /^program( code)?$/i,
     /^grant$/i,
     /^funding source$/i,
+  ],
+  accountType: [
+    /^account ?type$/i,
+    /^acct ?type$/i,
+    /^type$/i,
+    /^line ?type$/i,
   ],
   grantName: [
     /^grant name$/i,
@@ -127,6 +134,28 @@ export function isFullyMapped(mappings: ColumnMappingResult[]): boolean {
   )
 }
 
+// Patterns that identify a row as a cash balance entry (not a budget category).
+const CASH_BALANCE_ACCOUNT_TYPE = /^cash ?balance$/i
+const CASH_BALANCE_CATEGORY = /^(prior ?year ?)?cash ?(reserves?|balance|on ?hand|position|carry ?forward)/i
+
+function isCashBalanceRow(
+  row: string[],
+  catCol: number,
+  accountTypeCol: number,
+): boolean {
+  // Check Account Type column first (most explicit signal)
+  if (accountTypeCol >= 0) {
+    const acctType = String(row[accountTypeCol] ?? '').trim()
+    if (CASH_BALANCE_ACCOUNT_TYPE.test(acctType)) return true
+  }
+  // Fall back to category name pattern matching
+  if (catCol >= 0) {
+    const category = String(row[catCol] ?? '').trim()
+    if (CASH_BALANCE_CATEGORY.test(category)) return true
+  }
+  return false
+}
+
 function parseNumber(value: string | number | undefined): number {
   if (typeof value === 'number') return isNaN(value) ? 0 : value
   const cleaned = String(value ?? '')
@@ -151,6 +180,7 @@ export function applyMappings(
   const budgetCol = getCol('budget')
   const ytdCol = getCol('ytdActuals')
   const fundCol = getCol('fund')
+  const accountTypeCol = getCol('accountType')
 
   const grouped = new Map<
     string,
@@ -160,6 +190,9 @@ export function applyMappings(
   for (const row of dataRows) {
     const category = String(row[catCol] ?? '').trim()
     if (!category) continue
+
+    // Skip cash balance rows — they're extracted separately via extractCashBalance()
+    if (isCashBalanceRow(row, catCol, accountTypeCol)) continue
 
     const budget = parseNumber(row[budgetCol])
     const ytdActuals = parseNumber(row[ytdCol])
@@ -219,4 +252,41 @@ export function extractGrants(
   }
 
   return grants
+}
+
+/**
+ * Extract cash balance from rows identified as cash position entries.
+ * Returns the total cash amount found, or null if no cash balance rows detected.
+ * Looks at YTD Actuals first (the actual cash amount), falls back to Budget column.
+ */
+export function extractCashBalance(
+  mappings: ColumnMappingResult[],
+  dataRows: string[][]
+): number | null {
+  const getCol = (field: SchoolCFOField) =>
+    mappings.find((m) => m.mappedField === field)?.columnIndex ?? -1
+
+  const catCol = getCol('category')
+  const budgetCol = getCol('budget')
+  const ytdCol = getCol('ytdActuals')
+  const accountTypeCol = getCol('accountType')
+
+  let total = 0
+  let found = false
+
+  for (const row of dataRows) {
+    if (!isCashBalanceRow(row, catCol, accountTypeCol)) continue
+
+    // Prefer YTD Actuals (the actual cash on hand), fall back to budget column
+    const ytdVal = ytdCol >= 0 ? parseNumber(row[ytdCol]) : 0
+    const budgetVal = budgetCol >= 0 ? parseNumber(row[budgetCol]) : 0
+    const amount = ytdVal > 0 ? ytdVal : budgetVal
+
+    if (amount > 0) {
+      total += amount
+      found = true
+    }
+  }
+
+  return found ? total : null
 }

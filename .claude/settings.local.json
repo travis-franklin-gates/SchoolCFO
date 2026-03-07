@@ -9,7 +9,11 @@
       "WebSearch",
       "Bash(rm:*)",
       "Bash(npx eslint:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)",
+      "Bash(wait:*)",
+      "Bash(mv:*)"
     ]
   }
 }

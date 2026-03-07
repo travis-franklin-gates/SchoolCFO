@@ -1,0 +1,448 @@
+SchoolCFO Comprehensive Diagnostic Report
+==========================================
+Date: March 7, 2026
+Branch: main
+TypeScript errors: 0
+TODO/FIXME comments: 0
+
+
+================================================================================
+1. AUTHENTICATION & ONBOARDING
+================================================================================
+
+Status: Working (happy path) / Incomplete (edge cases)
+
+What's built:
+- Email/password auth via Supabase
+- (auth) route group for login/signup with shared AuthForm component
+- Server-side auth gate in (main)/layout.tsx checks getUser() and redirects
+- Onboarding page creates school record in DB
+- StoreInitializer hydrates Zustand from Supabase on mount
+
+Known issues:
+- CRITICAL: middleware.ts DOES NOT EXIST. Memory says it does, but it doesn't.
+  Supabase tokens expire (~1 hour). Without middleware refreshing the session on
+  every request, users will experience silent auth failures after idle periods.
+  This is the single biggest infrastructure gap.
+- Logout calls signOut() but DOES NOT clear Zustand store -- sensitive financial
+  data remains in memory after sign-out.
+- Login/signup call getSession() inside useEffect without awaiting properly.
+- StoreInitializer catches load errors and forces isLoaded=true -- user sees
+  seed data with no way to retry or know something failed.
+- No email verification flow configured.
+- No password strength requirements beyond 8 characters.
+
+Assessment: PROTOTYPE-GRADE. Happy path works. Token refresh, error recovery,
+and logout cleanup are missing for production.
+
+
+================================================================================
+2. DASHBOARD / MORNING BRIEFING
+================================================================================
+
+Status: Working
+
+What's built:
+- 671-line client component
+- AI-generated morning briefing (Claude), cached in sessionStorage keyed by
+  activeMonth:uploadedAt
+- Four metric cards: Cash Position, Budget Pace, Active Alerts, Next Board Meeting
+- Alert panel with severity badges and category-matched narratives
+- Agent insights panel (compliance, federal, budget analysis findings)
+- Three charts: Spend Rate (actual vs. budget), Projections (budget vs. actual
+  vs. projected), Top 8 Budget Categories
+- Month selector (appears only when multiple months have data)
+- Re-derives alert status from burn rate at render time (correct pattern --
+  doesn't trust stale DB values)
+- Fills chart gaps using OSPI apportionment percentages when monthlySpend is empty
+
+Known issues:
+- Briefing cache key uses uploadedAt from snapshot -- when switching months,
+  stale cached briefing can show momentarily until refetch.
+- OSPI-based chart reconstruction could have minor floating-point rounding drift
+  (cosmetic only).
+
+Assessment: PRODUCTION-READY. Well-structured, defensive, and visually polished.
+
+
+================================================================================
+3. UPLOAD DATA & PIPELINE
+================================================================================
+
+Status: Working
+
+What's built:
+- 891-line 4-step wizard (Drop -> Preview -> Mapping -> Confirmation)
+- Drag-and-drop or file picker
+- CSV parsing (PapaParse), Excel parsing (XLSX)
+- autoMapColumns() regex-matches headers to SchoolCFO fields
+- Manual column mapping UI (skipped if all required fields auto-detected)
+- applyMappings() aggregates rows by category
+- extractGrants() pulls grant rows independently
+- Month selector in confirmation step
+- After import, fires 4 agents (budget-analyst, cash-sentinel, grants-officer,
+  board-prep) in parallel via Promise.all
+- Upload history with delete
+
+Known issues:
+- Agent failures are SILENT. If any agent endpoint is down, user imports
+  successfully but gets no insights. No retry, no toast.
+- Category aggregation is CASE-SENSITIVE. "Personnel" and "personnel" become
+  two separate categories.
+- Grant deduplication NOT ENFORCED. If CSV has duplicate grant names, both
+  are imported.
+- parseNumber() silently converts "N/A" or "TBD" to 0 -- no warning to user.
+
+lib/uploadPipeline.ts:
+  Assessment: PRODUCTION-READY. Pure functions, no side effects, comprehensive
+  regex patterns, BOM handling.
+
+lib/fiscalYear.ts:
+  Assessment: PRODUCTION-READY. Correct WA fiscal year math (Sep=1, Aug=12).
+  Minor maintenance risk: cumulativeOspiPct hardcodes fiscal order array
+  separately from OSPI_PCT keys.
+
+
+================================================================================
+4. BUDGET ANALYSIS
+================================================================================
+
+Status: Working
+
+What's built:
+- Dual-mode layout (desktop table + mobile cards)
+- Category-level breakdown with budget, YTD actuals, variance, burn rate
+- Color-coded alert status badges (On Track, Watch, Concern, Action Required)
+- Expandable narrative explanations for flagged categories
+- Totals row with overall budget performance
+- Expected pace indicator (e.g., "Month 8 of 12 -- Expected pace: 67%")
+- Re-derives alert status at render time from burn rate thresholds
+
+Known issues: None found.
+
+Assessment: PRODUCTION-READY. Clean, defensive, fully responsive.
+
+
+================================================================================
+5. GRANT TRACKER
+================================================================================
+
+Status: Working
+
+What's built:
+- Two-section layout: WA Categorical Grants + Other Grants/Philanthropic
+- Per-grant cards with progress bars and vertical pace marker
+- WA Categorical uses fiscal year pace (from paceFromKey)
+- Other Grants compute elapsed % within grant's own timeline (start to end date)
+- Underspend/overspend risk warnings with specific dollar amounts
+- Grant status derived from spend percentage vs. expected pace
+
+Known issues: None found.
+
+Assessment: PRODUCTION-READY. Sophisticated dual-pace logic correctly implemented.
+
+
+================================================================================
+6. BOARD PACKET GENERATOR
+================================================================================
+
+Status: Working (with caveats)
+
+What's built:
+- 969-line page with 6 sections:
+  1. Budget vs. Actuals Summary (table)
+  2. Financial Narrative (AI-generated)
+  3. Cash Flow Report (12-month OSPI projection)
+  4. Grant/Categorical Spend Snapshot
+  5. Variance Explanations (AI-generated, editable)
+  6. Warrant Approval Package (placeholder)
+- Generate -> Draft -> Finalize workflow
+- Inline section editing (stored in Zustand)
+- PDF export via jsPDF + html2canvas (dynamic imports)
+- Board Prep agent auto-trigger when meeting is 0-10 days away
+- Packet history with month links
+
+Known issues:
+- PDF page breaks are DUMB. html2canvas slices at fixed pixel heights -- tables
+  can be cut mid-row.
+- Warrant section uses HARDCODED PLACEHOLDER DATA (AP_WARRANTS, PAYROLL_WARRANTS).
+  Warning text is present but a user could accidentally present fake data to
+  their board.
+- Variance explanations matched by category name -- if Claude returns a slightly
+  different name, the match fails silently.
+- Board packet save in store uses update-then-insert instead of upsert --
+  potential race condition (mitigated by unique constraint).
+
+Assessment: PROTOTYPE-GRADE. Core features work well, but PDF quality and warrant
+data need hardening for real board use.
+
+
+================================================================================
+7. AUDIT PREP & AUDIT AGENTS
+================================================================================
+
+Status: Working (with significant limitations)
+
+What's built:
+- 1063-line page with 8-domain checklist (40 items)
+- Four-phase sequential pipeline:
+  1. audit-compliance (pure data logic, no Claude)
+  2. audit-federal (Claude Opus 4.6)
+  3. audit-docs (Claude Opus 4.6) -- parallel with federal
+  4. audit-coordinator (Claude Opus 4.6, synthesis)
+- Results cached in agent_findings table
+- Expandable detail panels per checklist item
+- Readiness score 0-100 with letter grade
+- PDF export
+- Auto-triggers on first visit and after upload
+
+Known issues:
+- ~25 of 40 checklist items default to "manual" because the schema lacks
+  staff_members, IEP tracking, and invoice-level data. The compliance agent
+  can only verify things the DB actually tracks.
+- RACE CONDITION: Coordinator may not see freshly-written federal findings
+  due to async Supabase timing.
+- Scoring is OPAQUE and NON-DETERMINISTIC. Claude receives rough guidelines but
+  no fixed weights -- same data could score 65 or 72 on different runs.
+- JSON parse failures in federal/docs/coordinator agents return empty arrays
+  silently -- user sees blank sections with no error.
+- Type casting bug at line 468: f.agent_name as ComplianceItem['status']
+  should be 'as string'.
+
+Assessment: PROTOTYPE-GRADE. Architecture is solid but value is limited by
+schema gaps (most items are "manual review"). Scoring inconsistency is a real
+problem for a tool users will rely on.
+
+
+================================================================================
+8. ASK YOUR CFO
+================================================================================
+
+Status: Working
+
+What's built:
+- 517-line chat interface
+- Streaming Claude responses via ReadableStream reader
+- Markdown rendering with ReactMarkdown + remark-gfm (full component overrides
+  for tables, code, blockquotes, etc.)
+- File attachments: PDF (native document block), images (native image block),
+  DOCX (mammoth text extraction), XLSX (sheet-to-CSV conversion)
+- Drag-and-drop file attachment with overlay
+- Suggested questions on empty state
+- System prompt includes full financial snapshot, grants, alerts, school context,
+  and agent findings
+- Retry on error
+- Clear chat button
+
+Known issues:
+- mammoth is imported dynamically on the client -- adds ~150KB to bundle on
+  first DOCX attach. Not pre-loaded.
+- Chat history is in-memory only (Zustand) -- lost on page reload. No persistence.
+- System prompt sends full financial data on every message -- could be large
+  for schools with many categories.
+- No token limit awareness -- long conversations could exceed Claude's context
+  window.
+
+Assessment: PRODUCTION-READY for the core experience. File attachment handling
+is impressively thorough. Chat persistence would be a nice-to-have.
+
+
+================================================================================
+9. SETTINGS
+================================================================================
+
+Status: Working
+
+What's built:
+- School profile editing (name, authorizer, grade config, FTEs)
+- Important dates (board meeting, finance committee)
+- Categorical grant CRUD with quick-add presets
+- Other/Philanthropic grant CRUD
+- Opening cash balance field
+
+Known issues:
+- No validation on numeric fields -- accepts negative FTEs, negative cash balance.
+- Save success indicator shows regardless of Supabase failure -- write-through
+  is fire-and-forget.
+- Grant deduplication in store is silent -- user won't know if a grant they added
+  was merged with a CSV-imported one.
+
+Assessment: WORKING PROTOTYPE. Needs form validation and save error feedback.
+
+
+================================================================================
+10. MULTI-AGENT SYSTEM
+================================================================================
+
+Status: Working
+
+Agents:
+  Budget Analyst   | Claude     | Trigger: post-upload        | Working
+  Cash Sentinel    | Claude     | Trigger: post-upload        | Working
+  Grants Officer   | Claude     | Trigger: post-upload        | Working
+  Board Prep       | Claude     | Trigger: post-upload + page | Working
+  Audit Compliance | Pure logic | Trigger: audit prep page    | Working
+  Audit Federal    | Claude     | Trigger: audit prep page    | Working
+  Audit Docs       | Claude     | Trigger: audit prep page    | Working
+  Audit Coordinator| Claude     | Trigger: audit prep page    | Working
+
+Architecture:
+- Each agent is a separate API route under /api/agents/
+- Results persisted to agent_findings table with delete-then-insert pattern
+- Findings injected into Ask CFO system prompt so Claude can cite them
+
+Cross-cutting issues:
+- ALL agent JSON parse failures are SILENT -- return empty arrays, log to console.
+- No deduplication -- if Budget Analyst and Cash Sentinel flag the same issue,
+  both persist.
+- No confidence scores -- all findings treated equally regardless of data quality.
+- No user feedback loop -- can't mark findings as false positives.
+- Prompt tone inconsistency across agents (minor).
+
+Assessment: GOOD ARCHITECTURE, PROTOTYPE-GRADE EXECUTION. The pipeline design
+(trigger -> analyze -> persist -> surface) is sound.
+
+
+================================================================================
+11. ALL API ROUTES
+================================================================================
+
+Route                              | Auth Check      | Status
+-----------------------------------|-----------------|--------
+POST /api/chat                     | NONE            | Working
+POST /api/briefing                 | NONE            | Working
+POST /api/board-packet             | NONE            | Working
+POST /api/audit-report             | NONE            | Working
+POST /api/agents/budget-analyst    | Server Supabase | Working
+POST /api/agents/cash-sentinel     | Server Supabase | Working
+POST /api/agents/grants-officer    | Server Supabase | Working
+POST /api/agents/board-prep        | Server Supabase | Working
+POST /api/agents/audit-compliance  | Server Supabase | Working
+POST /api/agents/audit-federal     | Server Supabase | Working
+POST /api/agents/audit-docs        | NONE            | Working
+POST /api/agents/audit-coordinator | NONE            | Working
+
+ISSUE: /api/chat, /api/briefing, /api/board-packet, /api/audit-report,
+/api/agents/audit-docs, and /api/agents/audit-coordinator have NO server-side
+auth check. They trust whatever the client sends. The other agent routes use
+createClient() (server Supabase with cookies) which provides auth via RLS.
+The unauthenticated routes should verify the user's session.
+
+
+================================================================================
+12. SUPABASE SCHEMA & RLS
+================================================================================
+
+Tables (7):
+  schools, monthly_snapshots, grants, board_packets, school_context,
+  audit_checklists, agent_findings
+
+Migrations (7 files):
+  001_initial_schema.sql
+  002_fix_rls_policies.sql
+  002_school_context.sql          <-- DUPLICATE PREFIX
+  003_board_packets_constraint.sql
+  003_agent_findings.sql          <-- DUPLICATE PREFIX
+  004_audit_meta.sql
+  005_opening_cash.sql
+
+RLS:
+  All tables have RLS enabled with FOR ALL policies checking ownership via
+  auth.uid(). Policies are correct and secure.
+
+Known issues:
+- grants table has NO UNIQUE CONSTRAINT on (school_id, grant_type, name) --
+  duplicates possible in DB, deduplicated only in application code.
+- school_context has NO UNIQUE CONSTRAINT on (school_id, context_type, key) --
+  upserts create new rows instead of updating.
+- MIGRATION NUMBERING IS BROKEN -- two 002_*.sql and two 003_*.sql files.
+  Won't apply cleanly via supabase db push.
+- Write-through failures are SILENT everywhere -- console.error only. If
+  Supabase is unreachable, user works locally, then loses data on reload.
+- No expired school_context cleanup mechanism.
+
+Assessment: Schema is correct and RLS is solid. Missing unique constraints and
+broken migration numbering need fixing before any fresh deployment.
+
+
+================================================================================
+13. MOBILE RESPONSIVENESS
+================================================================================
+
+Component        | Mobile Support          | Quality
+-----------------|-------------------------|--------
+Sidebar          | Hamburger + backdrop    | Good
+Dashboard        | Single-column stacking  | Good
+Upload wizard    | Full-width steps        | Good
+Budget Analysis  | Card layout on mobile   | Good
+Grant Tracker    | Stacked cards           | Good
+Board Packet     | Print-optimized desktop | Adequate
+Audit Prep       | Stacked sections        | Good
+Ask CFO          | Full-width chat         | Good
+Settings         | Single-column forms     | Good
+
+Assessment: Better than expected for a prototype. Sidebar has proper mobile
+hamburger with backdrop overlay. Budget Analysis has explicit mobile card layout.
+Board Packet is the weakest on mobile (it's a print document).
+
+
+================================================================================
+14. TYPESCRIPT & BUILD
+================================================================================
+
+- npx tsc --noEmit: 0 errors. Clean.
+- No TODO/FIXME/HACK comments in any .ts or .tsx file.
+- .env.local is in .gitignore and not tracked. No leaked secrets.
+
+
+================================================================================
+SUMMARY: TOP 10 ISSUES FOR PHASE 2
+================================================================================
+
+ #  | Issue                                                    | Severity | Effort
+----|----------------------------------------------------------|----------|--------
+ 1  | No middleware.ts -- tokens expire, no server-side refresh | Critical | Small
+ 2  | Write-through failures are silent -- data loss risk       | High     | Medium
+ 3  | API routes /api/chat, /api/briefing, /api/board-packet,  | High     | Small
+    | /api/audit-report have no auth                           |          |
+ 4  | Migration numbering broken (duplicate 002/003 prefixes)  | High     | Small
+ 5  | grants table missing unique constraint -- dupes possible  | Medium   | Small
+ 6  | 25/40 audit items default to "manual" (missing tables)   | Medium   | Large
+ 7  | Agent failures are silent -- no retry, no notification    | Medium   | Medium
+ 8  | PDF page breaks cut tables mid-row                        | Medium   | Medium
+ 9  | Logout doesn't clear Zustand store                        | Medium   | Small
+10  | Audit readiness scoring is non-deterministic              | Medium   | Medium
+
+
+================================================================================
+OVERALL ASSESSMENT
+================================================================================
+
+What you have: A well-architected, visually polished prototype with a clear
+product vision. The Zustand store, pure upload pipeline, fiscal year math, and
+multi-agent architecture are solid foundations. Every page renders, every feature
+works on the happy path, TypeScript is clean, and mobile support is surprisingly
+good.
+
+What it isn't: Production-ready. The missing middleware, silent write failures,
+unauthenticated API routes, and broken migrations mean a fresh deployment would
+have real security and data integrity gaps. The audit prep system's value is
+constrained by schema limitations (most items are "manual review").
+
+Honest grade: Strong prototype / early beta. Fix items 1-4 and you have a
+deployable MVP. Fix 5-10 and you're approaching production quality.
+
+
+================================================================================
+PAGE-BY-PAGE QUALITY GRADES
+================================================================================
+
+  Dashboard ........... Production-ready
+  Upload Data ......... Production-ready (pipeline) / Prototype (error handling)
+  Budget Analysis ..... Production-ready
+  Grant Tracker ....... Production-ready
+  Board Packet ........ Prototype-grade
+  Audit Prep .......... Prototype-grade
+  Ask Your CFO ........ Production-ready
+  Settings ............ Working prototype
+  Auth/Onboarding ..... Prototype-grade

@@ -196,6 +196,7 @@ export default function SettingsPage() {
       gradeConfig: profile.gradeConfig,
       currentFTES: Number(profile.currentFTES),
       priorYearFTES: Number(profile.priorYearFTES),
+      openingCashBalance: Number(profile.openingCashBalance),
     })
     setProfileSaved(true)
     setTimeout(() => setProfileSaved(false), 2500)
@@ -381,6 +382,17 @@ export default function SettingsPage() {
               type="number"
               value={profile.priorYearFTES}
               onChange={(e) => setProfile({ ...profile, priorYearFTES: Number(e.target.value) })}
+              className={inputCls}
+            />
+          </div>
+          <div className="col-span-2">
+            <label className={labelCls}>Opening Cash Balance</label>
+            <p className="text-xs text-gray-500 mb-1">Prior year ending cash balance — used as the starting point for cash position calculations</p>
+            <input
+              type="number"
+              value={profile.openingCashBalance}
+              onChange={(e) => setProfile({ ...profile, openingCashBalance: Number(e.target.value) })}
+              placeholder="e.g. 338000"
               className={inputCls}
             />
           </div>

@@ -2,11 +2,18 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { CLAUDE_MODEL } from '@/lib/constants'
 import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
+import { createClient } from '@/lib/supabase-server'
 
 export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error('[briefing] ANTHROPIC_API_KEY is not set')
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 500 })
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })

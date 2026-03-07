@@ -4,6 +4,7 @@ import {
   labelFromKey,
   paceFromKey,
   fiscalIndexFromKey,
+  calculateCashPosition,
 } from './fiscalYear'
 
 export type AlertSeverity = 'info' | 'warning' | 'critical'
@@ -19,6 +20,7 @@ export interface SchoolProfile {
   priorYearFTES: number
   nextBoardMeeting: string
   nextFinanceCommittee: string
+  openingCashBalance: number
 }
 
 export interface BudgetCategory {
@@ -126,7 +128,7 @@ export interface AuditChecklist {
   reviewerNote: string
 }
 
-export type AgentName = 'budget_analyst' | 'cash_sentinel' | 'grants_officer' | 'board_prep' | 'audit_compliance' | 'audit_federal'
+export type AgentName = 'budget_analyst' | 'cash_sentinel' | 'grants_officer' | 'board_prep' | 'audit_compliance' | 'audit_federal' | 'audit_coordinator'
 export type FindingType = 'variance' | 'cash_risk' | 'grant_underspend' | 'grant_overspend' | 'braiding_opportunity' | 'board_action_required' | 'audit_verified' | 'audit_gap' | 'audit_manual' | 'federal_risk'
 export type FindingSeverity = 'info' | 'watch' | 'concern' | 'action'
 
@@ -188,7 +190,7 @@ interface AppState {
     month: string,
     fileName: string,
     rowCount: number,
-    importedGrants?: MappedGrant[]
+    importedGrants?: MappedGrant[],
   ) => void
   upsertSchoolContextEntry: (entry: SchoolContextEntry) => void
   removeSchoolContextEntry: (id: string) => void
@@ -198,6 +200,7 @@ interface AppState {
   setAgentFindings: (findings: AgentFinding[]) => void
   setLastAgentRunAt: (ts: string) => void
   setAuditMeta: (meta: { lastRun: string; score?: number; grade?: string }) => void
+  clearSession: () => void
 }
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
@@ -377,6 +380,7 @@ export const useStore = create<AppState>((set, get) => ({
     priorYearFTES: 418,
     nextBoardMeeting: '2026-03-26',
     nextFinanceCommittee: '2026-03-19',
+    openingCashBalance: 338000,
   },
   financialData: {
     totalBudget: 5150000,
@@ -438,6 +442,7 @@ export const useStore = create<AppState>((set, get) => ({
           priorYearFTES: Number(school.prior_year_ftes) || existing.priorYearFTES,
           nextBoardMeeting: school.next_board_meeting || existing.nextBoardMeeting,
           nextFinanceCommittee: school.next_finance_committee || existing.nextFinanceCommittee,
+          openingCashBalance: Number(school.opening_cash_balance) || existing.openingCashBalance,
         },
         auditAgentsLastRun: school.audit_agents_last_run ?? null,
         auditReadinessScore: school.audit_readiness_score ?? null,
@@ -495,14 +500,22 @@ export const useStore = create<AppState>((set, get) => ({
       snapshotGrantSpent = new Map(
         latestSnap.grants.map((g) => [g.name.toLowerCase(), g.spent])
       )
+      // Calculate dynamic cash position from opening balance + OSPI revenue - spending
+      const openingCash = get().schoolProfile.openingCashBalance
+      const { cashOnHand: calcCash, daysOfReserves: calcDays } = calculateCashPosition(
+        openingCash,
+        latestSnap.financialSummary.totalBudget,
+        latestSnap.financialSummary.totalActuals,
+        latestKey
+      )
       set({
         monthlySnapshots,
         activeMonth: latestKey,
         financialData: {
           totalBudget: latestSnap.financialSummary.totalBudget,
           ytdSpending: latestSnap.financialSummary.totalActuals,
-          cashOnHand: latestSnap.financialSummary.cashOnHand || existingFinancial.cashOnHand,
-          daysOfReserves: latestSnap.financialSummary.daysOfReserves || existingFinancial.daysOfReserves,
+          cashOnHand: calcCash,
+          daysOfReserves: calcDays,
           variancePercent: latestSnap.financialSummary.variancePercent,
           categories: latestSnap.budgetCategories,
           monthlySpend: latestSnap.monthlySpend,
@@ -631,16 +644,27 @@ export const useStore = create<AppState>((set, get) => ({
       })
     }
 
-    // 7. Load agent findings (last 7 days, not expired)
+    // 7. Load agent findings (last 7 days for regular agents, all time for audit agents)
     const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
     const today = new Date().toISOString().slice(0, 10)
-    const { data: findingRows } = await supabase
-      .from('agent_findings')
-      .select('*')
-      .eq('school_id', schoolId)
-      .gte('created_at', sevenDaysAgo)
-      .or(`expires_at.is.null,expires_at.gte.${today}`)
-      .order('created_at', { ascending: false })
+    const auditAgentNames = ['audit_compliance', 'audit_federal', 'audit_coordinator']
+    const [{ data: recentRows }, { data: auditFindingRows }] = await Promise.all([
+      supabase
+        .from('agent_findings')
+        .select('*')
+        .eq('school_id', schoolId)
+        .not('agent_name', 'in', `(${auditAgentNames.join(',')})`)
+        .gte('created_at', sevenDaysAgo)
+        .or(`expires_at.is.null,expires_at.gte.${today}`)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('agent_findings')
+        .select('*')
+        .eq('school_id', schoolId)
+        .in('agent_name', auditAgentNames)
+        .order('created_at', { ascending: false }),
+    ])
+    const findingRows = [...(recentRows ?? []), ...(auditFindingRows ?? [])]
 
     if (findingRows && findingRows.length > 0) {
       set({
@@ -679,6 +703,7 @@ export const useStore = create<AppState>((set, get) => ({
             prior_year_ftes: updated.priorYearFTES,
             next_board_meeting: updated.nextBoardMeeting || null,
             next_finance_committee: updated.nextFinanceCommittee || null,
+            opening_cash_balance: updated.openingCashBalance ?? 0,
           })
           .eq('id', schoolId)
         if (error) console.error('[store] updateSchoolProfile', error)
@@ -691,13 +716,20 @@ export const useStore = create<AppState>((set, get) => ({
   setActiveMonth: (month) => {
     const snap = get().monthlySnapshots[month]
     if (!snap) return
+    const openingCash = get().schoolProfile.openingCashBalance
+    const { cashOnHand, daysOfReserves } = calculateCashPosition(
+      openingCash,
+      snap.financialSummary.totalBudget,
+      snap.financialSummary.totalActuals,
+      month
+    )
     set({
       activeMonth: month,
       financialData: {
         totalBudget: snap.financialSummary.totalBudget,
         ytdSpending: snap.financialSummary.totalActuals,
-        cashOnHand: snap.financialSummary.cashOnHand,
-        daysOfReserves: snap.financialSummary.daysOfReserves,
+        cashOnHand,
+        daysOfReserves,
         variancePercent: snap.financialSummary.variancePercent,
         categories: snap.budgetCategories,
         monthlySpend: snap.monthlySpend,
@@ -981,7 +1013,11 @@ export const useStore = create<AppState>((set, get) => ({
         })
       })
 
-    const currentFinancialData = get().financialData
+    // Dynamic cash position: opening balance + OSPI revenue received - YTD spending
+    const openingCash = get().schoolProfile.openingCashBalance
+    const { cashOnHand, daysOfReserves } = calculateCashPosition(
+      openingCash, totalBudget, totalActuals, month
+    )
 
     // Capture existing grants before modifying state — used for name-matching and UUID reuse.
     const existingGrants = get().grants
@@ -1023,8 +1059,8 @@ export const useStore = create<AppState>((set, get) => ({
       financialSummary: {
         totalBudget,
         totalActuals,
-        cashOnHand: currentFinancialData.cashOnHand,
-        daysOfReserves: currentFinancialData.daysOfReserves,
+        cashOnHand,
+        daysOfReserves,
         variancePercent,
       },
       monthlySpend: [],
@@ -1037,6 +1073,8 @@ export const useStore = create<AppState>((set, get) => ({
         ...state.financialData,
         totalBudget,
         ytdSpending: totalActuals,
+        cashOnHand,
+        daysOfReserves,
         variancePercent,
         categories: newCategories,
         monthlySpend: [],
@@ -1087,8 +1125,8 @@ export const useStore = create<AppState>((set, get) => ({
         const financialSummary = {
           totalBudget,
           totalActuals,
-          cashOnHand: currentFinancialData.cashOnHand,
-          daysOfReserves: currentFinancialData.daysOfReserves,
+          cashOnHand,
+          daysOfReserves,
           variancePercent,
           monthlySpend: [],
           grants: snapshotGrants,
@@ -1324,4 +1362,43 @@ export const useStore = create<AppState>((set, get) => ({
       })
     }
   },
+
+  clearSession: () => set({
+    schoolId: null,
+    userId: null,
+    isLoaded: false,
+    schoolProfile: {
+      name: '',
+      authorizer: 'WA Charter School Commission',
+      gradeConfig: 'K-8',
+      currentFTES: 0,
+      priorYearFTES: 0,
+      nextBoardMeeting: '',
+      nextFinanceCommittee: '',
+      openingCashBalance: 0,
+    },
+    financialData: {
+      totalBudget: 0,
+      ytdSpending: 0,
+      cashOnHand: 0,
+      daysOfReserves: 0,
+      variancePercent: 0,
+      categories: [],
+      monthlySpend: [],
+    },
+    grants: [],
+    otherGrants: [],
+    alerts: [],
+    monthlySnapshots: {},
+    activeMonth: '',
+    chatMessages: [],
+    boardPackets: [],
+    schoolContextEntries: [],
+    auditChecklists: [],
+    agentFindings: [],
+    lastAgentRunAt: null,
+    auditAgentsLastRun: null,
+    auditReadinessScore: null,
+    auditReadinessGrade: null,
+  }),
 }))

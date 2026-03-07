@@ -45,6 +45,7 @@ const FIELD_OPTIONS: { value: SchoolCFOField; label: string }[] = [
   { value: 'budget', label: 'Budget Amount' },
   { value: 'ytdActuals', label: 'YTD Actuals' },
   { value: 'fund', label: 'Fund / Program' },
+  { value: 'accountType', label: 'Account Type' },
   { value: 'grantName', label: 'Grant Name' },
   { value: 'grantAmount', label: 'Grant Award Amount' },
   { value: 'grantSpent', label: 'Grant Spent to Date' },
@@ -230,7 +231,7 @@ export default function UploadPage() {
       selectedMonth,
       fileName,
       allDataRows.length,
-      mappedGrants.length > 0 ? mappedGrants : undefined
+      mappedGrants.length > 0 ? mappedGrants : undefined,
     )
 
     // Fire specialist agents in parallel (fire-and-forget)

@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { fiscalIndexFromKey } from '@/lib/fiscalYear'
 import { CLAUDE_MODEL } from '@/lib/constants'
 import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
+import { createClient } from '@/lib/supabase-server'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -135,6 +136,12 @@ ${alerts.map((a) => {
 
 export async function POST(req: Request) {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+    }
+
     const { messages, schoolProfile, financialData, grants, alerts, otherGrants = [], activeMonth = '2026-03', schoolContextEntries = [], agentFindings = [] } = await req.json()
 
     const systemPrompt = buildSystemPrompt(schoolProfile, financialData, grants, alerts, otherGrants, activeMonth, schoolContextEntries, agentFindings)

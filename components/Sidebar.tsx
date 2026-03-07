@@ -38,6 +38,7 @@ export default function Sidebar() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
+    useStore.getState().clearSession()
     router.push('/login')
     router.refresh()
   }

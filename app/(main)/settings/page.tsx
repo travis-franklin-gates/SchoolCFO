@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, FormEvent } from 'react'
-import { Plus, Trash2, Check, Zap, Pencil, X } from 'lucide-react'
+import { Plus, Trash2, Check, Zap, Pencil, X, Bell } from 'lucide-react'
 import { useStore, type OtherGrant, type OtherGrantRestrictions } from '@/lib/store'
 import SchoolContextManager from '@/components/SchoolContextManager'
 
@@ -163,6 +163,122 @@ function OtherGrantFormFields({
         >
           Cancel
         </button>
+      </div>
+    </form>
+  )
+}
+
+// ── Notification Preferences ──────────────────────────────────────────────────
+
+function NotificationPreferences() {
+  const { schoolId, upsertSchoolContextEntry, schoolContextEntries } = useStore()
+
+  const existing = schoolContextEntries.find(
+    (e) => e.contextType === 'notification_prefs' && e.key === 'email'
+  )
+  const savedPrefs = existing?.value as { action_alerts_enabled?: boolean; daily_digest_enabled?: boolean; email_address?: string } | undefined
+
+  const [actionAlerts, setActionAlerts] = useState(savedPrefs?.action_alerts_enabled ?? true)
+  const [dailyDigest, setDailyDigest] = useState(savedPrefs?.daily_digest_enabled ?? true)
+  const [email, setEmail] = useState(savedPrefs?.email_address ?? '')
+  const [saved, setSaved] = useState(false)
+
+  const handleSave = (e: FormEvent) => {
+    e.preventDefault()
+    if (!schoolId) return
+
+    upsertSchoolContextEntry({
+      id: existing?.id ?? crypto.randomUUID(),
+      contextType: 'notification_prefs',
+      key: 'email',
+      value: {
+        action_alerts_enabled: actionAlerts,
+        daily_digest_enabled: dailyDigest,
+        email_address: email,
+      },
+      expiresAt: null,
+    })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  const toggleCls = (enabled: boolean) =>
+    `relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+      enabled ? 'bg-[#1e3a5f]' : 'bg-gray-300'
+    }`
+
+  const dotCls = (enabled: boolean) =>
+    `inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+      enabled ? 'translate-x-6' : 'translate-x-1'
+    }`
+
+  return (
+    <form onSubmit={handleSave} className="card-static p-6">
+      <div className="flex items-center gap-2 mb-5">
+        <Bell size={16} className="text-[#1e3a5f]" />
+        <h2 className="text-base font-semibold text-gray-800" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+          Email Notifications
+        </h2>
+      </div>
+
+      <div className="space-y-5">
+        {/* Action Required toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Email me Action Required alerts immediately</p>
+            <p className="text-xs text-gray-400 mt-0.5">Get notified right away when urgent issues are found</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionAlerts(!actionAlerts)}
+            className={toggleCls(actionAlerts)}
+          >
+            <span className={dotCls(actionAlerts)} />
+          </button>
+        </div>
+
+        {/* Daily digest toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Send daily digest of Concern alerts</p>
+            <p className="text-xs text-gray-400 mt-0.5">Get a once-daily summary of active concerns</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDailyDigest(!dailyDigest)}
+            className={toggleCls(dailyDigest)}
+          >
+            <span className={dotCls(dailyDigest)} />
+          </button>
+        </div>
+
+        {/* Email address */}
+        <div>
+          <label className={labelCls}>Notification Email Address</label>
+          <p className="text-xs text-gray-400 mb-1.5">Leave blank to use your login email</p>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="ceo@myschool.org (defaults to login email)"
+            className={inputCls}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 mt-5">
+        <button
+          type="submit"
+          className="px-5 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
+          style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
+        >
+          Save Preferences
+        </button>
+        {saved && (
+          <span className="flex items-center gap-1.5 text-sm text-green-600">
+            <Check size={14} /> Saved
+          </span>
+        )}
       </div>
     </form>
   )
@@ -559,6 +675,9 @@ export default function SettingsPage() {
           ))}
         </div>
       </div>
+
+      {/* ── Notification Preferences ── */}
+      <NotificationPreferences />
 
       {/* ── School Context for AI ── */}
       <SchoolContextManager />

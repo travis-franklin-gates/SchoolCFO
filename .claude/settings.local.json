@@ -13,7 +13,9 @@
       "Bash(grep:*)",
       "Bash(wc:*)",
       "Bash(wait:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(npx supabase:*)",
+      "Bash(curl:*)"
     ]
   }
 }

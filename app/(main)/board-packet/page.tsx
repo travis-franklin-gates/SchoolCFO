@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useStore, type PacketStatus, type BoardPacketContent } from '@/lib/store'
 import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, labelFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
+import { generateBoardPacketPdf, type BoardPacketPdfData } from '@/lib/boardPacketPdf'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -268,67 +269,46 @@ export default function BoardPacketPage() {
   }
 
   const handleExportPDF = async () => {
-    if (!printRef.current || !hasContent) return
+    if (!hasContent || !content) return
     setExporting(true)
     setGenError(null)
 
     try {
-      const html2canvas = (await import('html2canvas')).default
-      const { jsPDF } = await import('jspdf')
-
-      const canvas = await html2canvas(printRef.current, {
-        scale: 1.5,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      })
-
-      const pdf = new jsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait' })
-      const pW = pdf.internal.pageSize.getWidth()   // 612
-      const pH = pdf.internal.pageSize.getHeight()  // 792
-      const MARGIN = 36
-      const HDR_H = 32
-      const FTR_H = 28
-      const TOP = MARGIN + HDR_H
-      const BOTTOM = pH - MARGIN - FTR_H
-      const USABLE_H = BOTTOM - TOP
-      const CW = pW - 2 * MARGIN
-
-      const ratio = CW / canvas.width
-      let yPx = 0
-      let page = 1
-
-      const addHeaderFooter = (n: number) => {
-        pdf.setFontSize(7.5)
-        pdf.setTextColor(150, 150, 150)
-        pdf.text(
-          `${schoolProfile.name}  ·  Board Financial Packet  ·  ${monthLabel}`,
-          MARGIN, MARGIN + 14
-        )
-        pdf.setDrawColor(220, 220, 220)
-        pdf.setLineWidth(0.5)
-        pdf.line(MARGIN, MARGIN + 20, pW - MARGIN, MARGIN + 20)
-        pdf.line(MARGIN, BOTTOM + 8, pW - MARGIN, BOTTOM + 8)
-        pdf.setFontSize(7.5)
-        pdf.text(`Page ${n}`, pW / 2, BOTTOM + 20, { align: 'center' })
-        pdf.text('Confidential — For Board Use Only', pW - MARGIN, BOTTOM + 20, { align: 'right' })
+      const pdfData: BoardPacketPdfData = {
+        schoolName: schoolProfile.name,
+        monthLabel,
+        activeMonth,
+        nextBoardMeeting: schoolProfile.nextBoardMeeting || null,
+        generatedDate: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+        totalBudget,
+        ytdSpending,
+        cashOnHand,
+        daysOfReserves,
+        variancePercent,
+        expectedPct,
+        pace,
+        categories,
+        grants,
+        cashFlowRows: cashFlowRows.map((r) => ({
+          label: r.fm.label,
+          ospiPct: r.ospiPct,
+          revenue: r.revenue,
+          expenses: r.expenses,
+          net: r.net,
+          balance: r.balance,
+          days: r.days,
+          isLow: r.isLow,
+          hasSnap: r.hasSnap,
+          isCurrent: r.fm.key === activeMonth,
+        })),
+        content,
+        flaggedCategories,
+        apWarrants: AP_WARRANTS,
+        payrollWarrants: PAYROLL_WARRANTS,
+        hasRealWarrants: false, // placeholder data — will be true when real warrant data exists
       }
 
-      while (yPx < canvas.height) {
-        if (page > 1) pdf.addPage()
-        const sliceHPx = Math.min(Math.round(USABLE_H / ratio), canvas.height - yPx)
-        const tmp = document.createElement('canvas')
-        tmp.width = canvas.width
-        tmp.height = sliceHPx
-        tmp.getContext('2d')!.drawImage(canvas, 0, yPx, canvas.width, sliceHPx, 0, 0, canvas.width, sliceHPx)
-        pdf.addImage(tmp.toDataURL('image/jpeg', 0.92), 'JPEG', MARGIN, TOP, CW, sliceHPx * ratio)
-        addHeaderFooter(page)
-        yPx += sliceHPx
-        page++
-      }
-
-      const fileName = `${schoolProfile.name.replace(/\s+/g, '-')}-Board-Packet-${activeMonth}.pdf`
-      pdf.save(fileName)
+      await generateBoardPacketPdf(pdfData)
       finalizeBoardPacket(activeMonth)
     } catch (err) {
       console.error('PDF export error:', err)

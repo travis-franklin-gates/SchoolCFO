@@ -111,7 +111,7 @@ export interface BoardPacket {
   content?: BoardPacketContent
 }
 
-export type SchoolContextType = 'guided' | 'freeform' | 'event_flag'
+export type SchoolContextType = 'guided' | 'freeform' | 'event_flag' | 'notification_prefs'
 
 export interface SchoolContextEntry {
   id: string

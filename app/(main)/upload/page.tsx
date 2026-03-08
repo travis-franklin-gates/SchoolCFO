@@ -345,6 +345,15 @@ export default function UploadPage() {
       const now = new Date().toISOString()
       useStore.getState().setLastAgentRunAt(now)
       useStore.getState().setAuditMeta({ lastRun: now })
+
+      // Trigger email notifications for concern/action findings
+      if (schoolId) {
+        fetch('/api/notifications/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ schoolId }),
+        }).catch((err) => console.error('[email-notifications] Failed:', err))
+      }
     })
   }
 

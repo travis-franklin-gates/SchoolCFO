@@ -11,11 +11,12 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   const { data: school } = await supabase
     .from('schools')
-    .select('id')
+    .select('id, onboarding_completed')
     .eq('user_id', user.id)
     .single()
 
   if (!school) redirect('/onboarding')
+  if (!school.onboarding_completed) redirect('/onboarding')
 
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: 'var(--surface-bg)' }}>

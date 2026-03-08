@@ -27,8 +27,23 @@ import {
   type ColumnMappingResult,
   type MappedCategory,
   type MappedGrant,
+  type ParseWarning,
   type SchoolCFOField,
 } from '@/lib/uploadPipeline'
+
+interface Toast {
+  id: string
+  type: 'warning' | 'error'
+  message: string
+  action?: { label: string; onClick: () => void }
+}
+
+interface DuplicateGrant {
+  name: string
+  existingAmount: number
+  newAmount: number
+  newSpent: number
+}
 
 type Step = 'drop' | 'preview' | 'mapping' | 'confirmation'
 
@@ -107,6 +122,9 @@ export default function UploadPage() {
   const [skippedMapping, setSkippedMapping] = useState(false)
   const [mappedData, setMappedData] = useState<MappedCategory[]>([])
   const [mappedGrants, setMappedGrants] = useState<MappedGrant[]>([])
+  const [parseWarnings, setParseWarnings] = useState<ParseWarning[]>([])
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const [duplicateGrants, setDuplicateGrants] = useState<DuplicateGrant[]>([])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -122,8 +140,20 @@ export default function UploadPage() {
     setColumnMappings([])
     setMappedData([])
     setMappedGrants([])
+    setParseWarnings([])
     setError(null)
     setSkippedMapping(false)
+    setDuplicateGrants([])
+  }
+
+  const addToast = (toast: Omit<Toast, 'id'>) => {
+    const id = Date.now().toString()
+    setToasts((prev) => [...prev, { ...toast, id }])
+    if (!toast.action) setTimeout(() => dismissToast(id), 10000)
+  }
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
   }
 
   const handleFile = async (file: File) => {
@@ -190,10 +220,28 @@ export default function UploadPage() {
     e.target.value = ''
   }
 
+  const runMappingAndCollectWarnings = (mappings: ColumnMappingResult[]) => {
+    const warnings: ParseWarning[] = []
+    const categories = applyMappings(mappings, allDataRows, warnings)
+    const grants = extractGrants(mappings, allDataRows, warnings)
+    setMappedData(categories)
+    setMappedGrants(grants)
+    setParseWarnings(warnings)
+    if (warnings.length > 0) {
+      const rowNums = [...new Set(warnings.map((w) => w.row))].sort((a, b) => a - b)
+      const rowList = rowNums.length > 5
+        ? rowNums.slice(0, 5).join(', ') + ` and ${rowNums.length - 5} more`
+        : rowNums.join(', ')
+      addToast({
+        type: 'warning',
+        message: `Some values couldn't be read: row${rowNums.length > 1 ? 's' : ''} ${rowList}. These were treated as $0 — check your export for these rows.`,
+      })
+    }
+  }
+
   const handleProceedFromPreview = () => {
     if (isFullyMapped(columnMappings)) {
-      setMappedData(applyMappings(columnMappings, allDataRows))
-      setMappedGrants(extractGrants(columnMappings, allDataRows))
+      runMappingAndCollectWarnings(columnMappings)
       setSkippedMapping(true)
       setStep('confirmation')
     } else {
@@ -219,12 +267,131 @@ export default function UploadPage() {
       return
     }
     setError(null)
-    setMappedData(applyMappings(columnMappings, allDataRows))
-    setMappedGrants(extractGrants(columnMappings, allDataRows))
+    runMappingAndCollectWarnings(columnMappings)
     setStep('confirmation')
   }
 
+  const fireAgent = async (
+    name: string,
+    url: string,
+    body: Record<string, unknown>,
+  ) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(`${res.status}`)
+    return { name, url, body }
+  }
+
+  const fireAgentsWithRetry = (month: string) => {
+    const state = useStore.getState()
+    const schoolId = state.schoolId
+    if (!schoolId) return
+
+    const pacePercent = Math.round(paceFromKey(month) * 100)
+    const fd = state.financialData
+
+    const agents: { name: string; url: string; body: Record<string, unknown> }[] = [
+      {
+        name: 'Budget Analyst',
+        url: '/api/agents/budget-analyst',
+        body: { schoolId, activeMonth: month, pacePercent, categories: fd.categories, totalBudget: fd.totalBudget, ytdSpending: fd.ytdSpending },
+      },
+      {
+        name: 'Cash Sentinel',
+        url: '/api/agents/cash-sentinel',
+        body: { schoolId, activeMonth: month, cashOnHand: fd.cashOnHand, daysOfReserves: fd.daysOfReserves, totalBudget: fd.totalBudget, ytdSpending: fd.ytdSpending },
+      },
+      {
+        name: 'Grants Officer',
+        url: '/api/agents/grants-officer',
+        body: { schoolId, activeMonth: month, pacePercent, grants: state.grants, otherGrants: state.otherGrants },
+      },
+      {
+        name: 'Audit Compliance',
+        url: '/api/agents/audit-compliance',
+        body: { schoolId, activeMonth: month },
+      },
+      {
+        name: 'Audit Federal',
+        url: '/api/agents/audit-federal',
+        body: { schoolId, activeMonth: month, grants: state.grants, totalBudget: fd.totalBudget, ytdSpending: fd.ytdSpending },
+      },
+    ]
+
+    const settled = agents.map(async (agent) => {
+      try {
+        await fireAgent(agent.name, agent.url, agent.body)
+      } catch (err) {
+        console.error(`[agents] ${agent.name} failed:`, err)
+        addToast({
+          type: 'error',
+          message: `Your data was saved. ${agent.name} couldn't complete analysis — tap to retry.`,
+          action: {
+            label: 'Retry',
+            onClick: () => {
+              fireAgent(agent.name, agent.url, agent.body).catch((retryErr) => {
+                console.error(`[agents] ${agent.name} retry failed:`, retryErr)
+              })
+            },
+          },
+        })
+      }
+    })
+
+    Promise.all(settled).then(() => {
+      const now = new Date().toISOString()
+      useStore.getState().setLastAgentRunAt(now)
+      useStore.getState().setAuditMeta({ lastRun: now })
+    })
+  }
+
   const handleImport = () => {
+    // Check for duplicate grants before importing
+    if (mappedGrants.length > 0) {
+      const existingGrants = useStore.getState().grants
+      const dupes: DuplicateGrant[] = []
+      for (const mg of mappedGrants) {
+        const existing = existingGrants.find(
+          (g) => g.name.toLowerCase() === mg.name.toLowerCase()
+        )
+        if (existing) {
+          dupes.push({
+            name: mg.name,
+            existingAmount: existing.awardAmount,
+            newAmount: mg.awardAmount,
+            newSpent: mg.spent,
+          })
+        }
+      }
+      if (dupes.length > 0 && duplicateGrants.length === 0) {
+        setDuplicateGrants(dupes)
+        return // show dialog, don't import yet
+      }
+    }
+
+    doImport()
+  }
+
+  const handleDuplicateDecision = (grantName: string, action: 'update' | 'keep') => {
+    if (action === 'keep') {
+      // Remove this grant from mappedGrants so it won't overwrite
+      setMappedGrants((prev) => prev.filter((g) => g.name.toLowerCase() !== grantName.toLowerCase()))
+    }
+    // Remove from pending duplicates
+    setDuplicateGrants((prev) => {
+      const remaining = prev.filter((d) => d.name.toLowerCase() !== grantName.toLowerCase())
+      // If that was the last one, auto-proceed with import
+      if (remaining.length === 0) {
+        setTimeout(() => doImport(), 0)
+      }
+      return remaining
+    })
+  }
+
+  const doImport = () => {
     setImporting(true)
     importFinancialData(
       mappedData,
@@ -234,75 +401,7 @@ export default function UploadPage() {
       mappedGrants.length > 0 ? mappedGrants : undefined,
     )
 
-    // Fire specialist agents in parallel (fire-and-forget)
-    const state = useStore.getState()
-    const schoolId = state.schoolId
-    if (schoolId) {
-      const pacePercent = Math.round(paceFromKey(selectedMonth) * 100)
-      const fd = state.financialData
-
-      Promise.all([
-        fetch('/api/agents/budget-analyst', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            schoolId,
-            activeMonth: selectedMonth,
-            pacePercent,
-            categories: fd.categories,
-            totalBudget: fd.totalBudget,
-            ytdSpending: fd.ytdSpending,
-          }),
-        }),
-        fetch('/api/agents/cash-sentinel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            schoolId,
-            activeMonth: selectedMonth,
-            cashOnHand: fd.cashOnHand,
-            daysOfReserves: fd.daysOfReserves,
-            totalBudget: fd.totalBudget,
-            ytdSpending: fd.ytdSpending,
-          }),
-        }),
-        fetch('/api/agents/grants-officer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            schoolId,
-            activeMonth: selectedMonth,
-            pacePercent,
-            grants: state.grants,
-            otherGrants: state.otherGrants,
-          }),
-        }),
-        // Audit agents: compliance + federal (lightweight — no Claude for compliance, single call for federal)
-        fetch('/api/agents/audit-compliance', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ schoolId, activeMonth: selectedMonth }),
-        }),
-        fetch('/api/agents/audit-federal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            schoolId,
-            activeMonth: selectedMonth,
-            grants: state.grants,
-            totalBudget: fd.totalBudget,
-            ytdSpending: fd.ytdSpending,
-          }),
-        }),
-      ]).then(() => {
-        const now = new Date().toISOString()
-        useStore.getState().setLastAgentRunAt(now)
-        useStore.getState().setAuditMeta({ lastRun: now })
-      }).catch((err) => {
-        console.error('[agents] trigger failed:', err)
-      })
-    }
-
+    fireAgentsWithRetry(selectedMonth)
     router.push('/dashboard')
   }
 
@@ -547,6 +646,23 @@ export default function UploadPage() {
               We couldn&apos;t automatically identify all columns. Tell us what each one contains.
             </span>
           </div>
+
+          {/* Ambiguous column warning */}
+          {(() => {
+            const unmatched = columnMappings.filter((m) => m.confidenceScore < 70 && m.mappedField === 'ignore')
+            if (unmatched.length === 0) return null
+            return (
+              <div className="bg-yellow-50 border border-yellow-300 rounded-lg px-4 py-3 text-sm text-yellow-900">
+                <p className="font-medium mb-1">
+                  We couldn&apos;t match these columns:{' '}
+                  {unmatched.map((m) => m.sourceColumn).join(', ')}
+                </p>
+                <p className="text-yellow-700 text-xs">
+                  Try renaming them in your accounting software to: Account, Account Type, Budget Amount, YTD Actuals, Month.
+                </p>
+              </div>
+            )
+          })()}
 
           {columnMappings.map((m) => (
             <div key={m.columnIndex} className="card-static p-5">
@@ -886,6 +1002,86 @@ export default function UploadPage() {
           </div>
         )}
       </div>
+
+      {/* ── Duplicate Grant Dialog ── */}
+      {duplicateGrants.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900">Duplicate Grants Found</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {duplicateGrants.length === 1
+                  ? 'This grant is already in your system.'
+                  : `${duplicateGrants.length} grants are already in your system.`}
+              </p>
+            </div>
+            <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
+              {duplicateGrants.map((dg) => (
+                <div key={dg.name} className="px-5 py-4">
+                  <p className="text-sm font-medium text-gray-800 mb-1">
+                    We found <strong>{dg.name}</strong> in your upload. This grant is already in your system.
+                  </p>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Current award: {fmt(dg.existingAmount)} → New award: {fmt(dg.newAmount)}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleDuplicateDecision(dg.name, 'update')}
+                      className="px-3 py-1.5 text-xs font-medium text-white rounded-md hover:opacity-90 transition-opacity"
+                      style={{ background: 'var(--brand-700)' }}
+                    >
+                      Update to {fmt(dg.newAmount)}
+                    </button>
+                    <button
+                      onClick={() => handleDuplicateDecision(dg.name, 'keep')}
+                      className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    >
+                      Keep Existing
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Toasts ── */}
+      {toasts.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`rounded-lg border px-4 py-3 shadow-lg text-sm ${
+                toast.type === 'warning'
+                  ? 'bg-yellow-50 border-yellow-300 text-yellow-900'
+                  : 'bg-red-50 border-red-300 text-red-900'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p>{toast.message}</p>
+                  {toast.action && (
+                    <button
+                      onClick={() => { toast.action!.onClick(); dismissToast(toast.id) }}
+                      className="mt-2 text-xs font-semibold underline hover:no-underline"
+                    >
+                      {toast.action.label}
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => dismissToast(toast.id)}
+                  className="shrink-0 text-xs opacity-60 hover:opacity-100"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

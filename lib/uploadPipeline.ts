@@ -16,7 +16,14 @@ export interface ColumnMappingResult {
   columnIndex: number
   mappedField: SchoolCFOField
   confident: boolean
+  confidenceScore: number // 0–100
   sampleValues: string[]
+}
+
+export interface ParseWarning {
+  row: number // 1-based data row index
+  column: string
+  originalValue: string
 }
 
 export interface MappedCategory {
@@ -101,6 +108,7 @@ export function autoMapColumns(
     const h = header.replace(/^\uFEFF/, '').trim()
     let mappedField: SchoolCFOField = 'ignore'
     let confident = false
+    let confidenceScore = 0
 
     for (const [field, patterns] of Object.entries(FIELD_PATTERNS) as [
       Exclude<SchoolCFOField, 'ignore'>,
@@ -109,6 +117,7 @@ export function autoMapColumns(
       if (patterns.some((p) => p.test(h))) {
         mappedField = field
         confident = true
+        confidenceScore = 100
         break
       }
     }
@@ -118,7 +127,7 @@ export function autoMapColumns(
       .map((row) => String(row[colIndex] ?? '').trim())
       .filter(Boolean)
 
-    return { sourceColumn: header, columnIndex: colIndex, mappedField, confident, sampleValues }
+    return { sourceColumn: header, columnIndex: colIndex, mappedField, confident, confidenceScore, sampleValues }
   })
 }
 
@@ -156,11 +165,34 @@ function isCashBalanceRow(
   return false
 }
 
-function parseNumber(value: string | number | undefined): number {
+/** Convert "hello world" → "Hello World" for category normalization. */
+function toTitleCase(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/(?:^|\s|[-/])\S/g, (ch) => ch.toUpperCase())
+}
+
+// Values treated as intentionally blank (not real numbers).
+const UNPARSEABLE = /^(n\/?a|tbd|#n\/?a|#ref!|#value!|--?|\.{2,})$/i
+
+function parseNumber(
+  value: string | number | undefined,
+  warnings?: ParseWarning[],
+  row?: number,
+  column?: string,
+): number {
   if (typeof value === 'number') return isNaN(value) ? 0 : value
-  const cleaned = String(value ?? '')
-    .replace(/[$,\s]/g, '')
-    .trim()
+  const raw = String(value ?? '').trim()
+  const cleaned = raw.replace(/[$,\s]/g, '')
+
+  // Collect warning for known-unparseable placeholders (non-empty, non-zero)
+  if (raw !== '' && UNPARSEABLE.test(cleaned)) {
+    if (warnings && row !== undefined && column) {
+      warnings.push({ row, column, originalValue: raw })
+    }
+    return 0
+  }
+
   const n = parseFloat(cleaned)
   return isNaN(n) ? 0 : n
 }
@@ -171,7 +203,8 @@ function parseNumber(value: string | number | undefined): number {
  */
 export function applyMappings(
   mappings: ColumnMappingResult[],
-  dataRows: string[][]
+  dataRows: string[][],
+  warnings?: ParseWarning[],
 ): MappedCategory[] {
   const getCol = (field: SchoolCFOField) =>
     mappings.find((m) => m.mappedField === field)?.columnIndex ?? -1
@@ -182,21 +215,28 @@ export function applyMappings(
   const fundCol = getCol('fund')
   const accountTypeCol = getCol('accountType')
 
+  const budgetHeader = budgetCol >= 0 ? (mappings.find(m => m.columnIndex === budgetCol)?.sourceColumn ?? 'Budget') : 'Budget'
+  const ytdHeader = ytdCol >= 0 ? (mappings.find(m => m.columnIndex === ytdCol)?.sourceColumn ?? 'YTD Actuals') : 'YTD Actuals'
+
   const grouped = new Map<
     string,
     { budget: number; ytdActuals: number; fund?: string }
   >()
 
-  for (const row of dataRows) {
-    const category = String(row[catCol] ?? '').trim()
-    if (!category) continue
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i]
+    const rawCategory = String(row[catCol] ?? '').trim()
+    if (!rawCategory) continue
 
     // Skip cash balance rows — they're extracted separately via extractCashBalance()
     if (isCashBalanceRow(row, catCol, accountTypeCol)) continue
 
-    const budget = parseNumber(row[budgetCol])
-    const ytdActuals = parseNumber(row[ytdCol])
+    const budget = parseNumber(row[budgetCol], warnings, i + 1, budgetHeader)
+    const ytdActuals = parseNumber(row[ytdCol], warnings, i + 1, ytdHeader)
     if (budget === 0 && ytdActuals === 0) continue
+
+    // Normalize category to title case so "personnel" / "PERSONNEL" / "Personnel" aggregate together
+    const category = toTitleCase(rawCategory)
 
     const fund =
       fundCol >= 0 ? String(row[fundCol] ?? '').trim() || undefined : undefined
@@ -223,7 +263,8 @@ export function applyMappings(
  */
 export function extractGrants(
   mappings: ColumnMappingResult[],
-  dataRows: string[][]
+  dataRows: string[][],
+  warnings?: ParseWarning[],
 ): MappedGrant[] {
   const nameCol = mappings.find((m) => m.mappedField === 'grantName')?.columnIndex ?? -1
   const amountCol = mappings.find((m) => m.mappedField === 'grantAmount')?.columnIndex ?? -1
@@ -231,6 +272,9 @@ export function extractGrants(
 
   // If no Grant Name column was detected, return early — there is nothing to extract.
   if (nameCol === -1) return []
+
+  const amountHeader = amountCol >= 0 ? (mappings.find(m => m.columnIndex === amountCol)?.sourceColumn ?? 'Grant Award') : 'Grant Award'
+  const spentHeader = spentCol >= 0 ? (mappings.find(m => m.columnIndex === spentCol)?.sourceColumn ?? 'Grant Spent') : 'Grant Spent'
 
   const grants: MappedGrant[] = []
 
@@ -245,8 +289,8 @@ export function extractGrants(
       continue // empty grant name — skip this row, do NOT stop
     }
 
-    const awardAmount = amountCol >= 0 ? parseNumber(row[amountCol]) : 0
-    const spent = spentCol >= 0 ? parseNumber(row[spentCol]) : 0
+    const awardAmount = amountCol >= 0 ? parseNumber(row[amountCol], warnings, i + 1, amountHeader) : 0
+    const spent = spentCol >= 0 ? parseNumber(row[spentCol], warnings, i + 1, spentHeader) : 0
 
     grants.push({ name, awardAmount, spent })
   }
@@ -261,7 +305,8 @@ export function extractGrants(
  */
 export function extractCashBalance(
   mappings: ColumnMappingResult[],
-  dataRows: string[][]
+  dataRows: string[][],
+  warnings?: ParseWarning[],
 ): number | null {
   const getCol = (field: SchoolCFOField) =>
     mappings.find((m) => m.mappedField === field)?.columnIndex ?? -1

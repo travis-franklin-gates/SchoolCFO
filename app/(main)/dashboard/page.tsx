@@ -4,14 +4,14 @@ import { useState, useEffect, useRef } from 'react'
 import {
   AreaChart,
   Area,
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   Legend,
+  ReferenceLine,
+  ReferenceArea,
 } from 'recharts'
 import {
   AlertTriangle,
@@ -22,10 +22,11 @@ import {
   Upload,
   ChevronRight,
   Bot,
+  CheckCircle2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
-import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
+import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, OSPI_PCT, DEFAULT_OSPI_PCT, cumulativeOspiPct } from '@/lib/fiscalYear'
 
 function fmt(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
@@ -357,89 +358,98 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
         {/* Card 1 — Cash Position */}
-        <div className="card-static p-5">
-          <div className="flex items-start justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Cash Position</p>
-            <div className={`w-2.5 h-2.5 rounded-full mt-0.5 ${
+        <div className="card-static px-6 py-6 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif', letterSpacing: '0.08em' }}>Cash Position</p>
+            <div className={`w-3 h-3 rounded-full ${
               financialData.daysOfReserves >= 60 ? 'bg-green-500' :
               financialData.daysOfReserves >= 30 ? 'bg-yellow-400' : 'bg-red-500'
             }`} />
           </div>
-          <p className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{fmt(financialData.cashOnHand)}</p>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+          <p className="text-4xl font-extrabold text-gray-900 tracking-tight" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{fmt(financialData.cashOnHand)}</p>
+          <p className="text-sm mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
             {financialData.daysOfReserves} days of operating reserves
           </p>
-          <p className={`text-xs mt-1.5 font-medium ${
-            financialData.daysOfReserves >= 60 ? 'text-green-600' :
-            financialData.daysOfReserves >= 30 ? 'text-amber-600' : 'text-red-600'
+          <span className={`inline-flex items-center gap-1 mt-2.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+            financialData.daysOfReserves >= 60
+              ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
+              : financialData.daysOfReserves >= 30
+              ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+              : 'bg-red-50 text-red-700 ring-1 ring-red-200'
           }`}>
             {financialData.daysOfReserves >= 60
-              ? '✓ Above 60-day healthy threshold'
+              ? 'Above 60-day threshold'
               : financialData.daysOfReserves >= 30
-              ? '⚠ Monitor closely'
-              : '⚠ Below minimum threshold'}
-          </p>
+              ? 'Monitor closely'
+              : 'Below minimum threshold'}
+          </span>
         </div>
 
         {/* Card 2 — Budget Pace */}
-        <div className="card-static p-5">
-          <div className="flex items-start justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Budget Pace</p>
+        <div className="card-static px-6 py-6 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif', letterSpacing: '0.08em' }}>Budget Pace</p>
             <TrendingUp size={16} style={{ color: 'var(--text-tertiary)' }} />
           </div>
-          <p className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{burnPct}%</p>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>of annual budget spent</p>
-          <p className={`text-xs mt-1.5 font-medium ${
-            Math.abs(paceDelta) <= 2  ? 'text-green-600' :
-            paceDelta > 5             ? 'text-red-600'   :
-            paceDelta > 0             ? 'text-amber-600' : 'text-green-600'
-          }`}>
-            Expected: {PACE_PCT}%{' '}
-            {Math.abs(paceDelta) <= 2
-              ? '· On pace ✓'
-              : paceDelta > 0
-              ? `· +${paceDelta}pp over pace ⚠`
-              : `· ${Math.abs(paceDelta)}pp under pace ✓`}
+          <p className="text-4xl font-extrabold text-gray-900 tracking-tight" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+            {burnPct}<span className="text-2xl font-bold">%</span>
           </p>
+          <p className="text-sm mt-1.5" style={{ color: 'var(--text-tertiary)' }}>of annual budget spent</p>
+          <span className={`inline-flex items-center gap-1 mt-2.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+            Math.abs(paceDelta) <= 2
+              ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
+              : paceDelta > 5
+              ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
+              : paceDelta > 0
+              ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+              : 'bg-green-50 text-green-700 ring-1 ring-green-200'
+          }`}>
+            {Math.abs(paceDelta) <= 2
+              ? `On pace (expected ${PACE_PCT}%)`
+              : paceDelta > 0
+              ? `+${paceDelta}pp over pace`
+              : `${Math.abs(paceDelta)}pp under pace`}
+          </span>
         </div>
 
         {/* Card 3 — Active Alerts (clickable → Budget Analysis) */}
         <Link
           href="/budget-analysis"
-          className="card p-5 block"
+          className="card px-6 py-6 block hover:shadow-md transition-shadow"
         >
-          <div className="flex items-start justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Active Alerts</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif', letterSpacing: '0.08em' }}>Active Alerts</p>
             <AlertTriangle className={alerts.length > 0 ? 'text-amber-500' : 'text-gray-300'} size={16} />
           </div>
-          <p className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{alerts.length}</p>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>items need attention</p>
+          <p className="text-4xl font-extrabold text-gray-900 tracking-tight" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{alerts.length}</p>
+          <p className="text-sm mt-1.5" style={{ color: 'var(--text-tertiary)' }}>items need attention</p>
           {(actionCount > 0 || watchConcernCount > 0) && (
-            <p className="text-xs mt-1.5 font-medium">
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
               {actionCount > 0 && (
-                <span className="text-red-600">{actionCount} Action Required</span>
-              )}
-              {actionCount > 0 && watchConcernCount > 0 && (
-                <span className="text-gray-400"> · </span>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-200">
+                  {actionCount} Action
+                </span>
               )}
               {watchConcernCount > 0 && (
-                <span className="text-amber-600">{watchConcernCount} Watch/Concern</span>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+                  {watchConcernCount} Watch/Concern
+                </span>
               )}
-            </p>
+            </div>
           )}
         </Link>
 
         {/* Card 4 — Next Board Meeting (clickable → Board Packet) */}
         <Link
           href="/board-packet"
-          className="card p-5 block"
+          className="card px-6 py-6 block hover:shadow-md transition-shadow"
         >
-          <div className="flex items-start justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Next Board Meeting</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif', letterSpacing: '0.08em' }}>Next Board Meeting</p>
             <Calendar size={16} style={{ color: 'var(--text-tertiary)' }} />
           </div>
-          <p className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{fmtShort(schoolProfile.nextBoardMeeting)}</p>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+          <p className="text-4xl font-extrabold text-gray-900 tracking-tight" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{fmtShort(schoolProfile.nextBoardMeeting)}</p>
+          <p className="text-sm mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
             {boardMeetingDays != null
               ? boardMeetingDays > 0
                 ? `${boardMeetingDays} days away`
@@ -448,17 +458,148 @@ export default function DashboardPage() {
                 : `${Math.abs(boardMeetingDays)} days ago`
               : fmtDate(schoolProfile.nextBoardMeeting)}
           </p>
-          <p className="text-xs mt-1.5 font-medium" style={{ color: 'var(--text-tertiary)' }}>
-            Packet:{' '}
-            <span className={
-              latestPacket?.status === 'finalized' ? 'text-green-600' :
-              latestPacket?.status === 'draft'     ? 'text-amber-600' : 'text-gray-500'
-            }>
-              {latestPacket ? packetStatusLabel[latestPacket.status] : 'Not started'}
+          <div className="mt-2.5">
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+              latestPacket?.status === 'finalized'
+                ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
+                : latestPacket?.status === 'draft'
+                ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                : 'bg-gray-100 text-gray-500 ring-1 ring-gray-200'
+            }`}>
+              Packet: {latestPacket ? packetStatusLabel[latestPacket.status] : 'Not started'}
             </span>
-          </p>
+          </div>
         </Link>
       </div>
+
+      {/* ── Cash Projection Chart ──────────────────────────────────────── */}
+      {(() => {
+        const openingCash = schoolProfile.openingCashBalance
+        const totalBudget = financialData.totalBudget
+        const fiscalMonths = getFiscalMonths()
+        const monthlyBurn = activeFiscalIdx > 0 ? financialData.ytdSpending / activeFiscalIdx : totalBudget / 12
+        const dailyBurn = totalBudget > 0 ? totalBudget / 365 : 1
+        const concern30 = Math.round(dailyBurn * 30)
+        const watch45 = Math.round(dailyBurn * 45)
+
+        // Build month-by-month cash: opening + cumulative OSPI revenue - cumulative expenses
+        // For months through active: use actuals. For future months: project using monthly burn rate.
+        const cashData = fiscalMonths.map((fm) => {
+          const revenue = totalBudget * (cumulativeOspiPct(fm.key) / 100)
+          let expenses: number
+          if (fm.fiscalIndex <= activeFiscalIdx) {
+            // Actual months: pro-rate YTD actuals by OSPI weight
+            expenses = financialData.ytdSpending * (fm.fiscalIndex / activeFiscalIdx)
+          } else {
+            // Projected months: actuals through current + burn rate for future
+            expenses = financialData.ytdSpending + monthlyBurn * (fm.fiscalIndex - activeFiscalIdx)
+          }
+          const cash = Math.round(openingCash + revenue - expenses)
+          return {
+            month: fm.shortLabel,
+            fiscalIndex: fm.fiscalIndex,
+            cash,
+            isProjected: fm.fiscalIndex > activeFiscalIdx,
+          }
+        })
+
+        // Split into actual vs projected for styling
+        const chartData = cashData.map((d) => ({
+          month: d.month,
+          actual: d.fiscalIndex <= activeFiscalIdx ? d.cash : null,
+          projected: d.fiscalIndex >= activeFiscalIdx ? d.cash : null,
+        }))
+
+        const allCash = cashData.map((d) => d.cash)
+        const minCash = Math.min(...allCash)
+        const maxCash = Math.max(...allCash)
+        const yMin = Math.min(minCash, 0) - 50000
+        const yMax = maxCash + 100000
+        const goesNegative = minCash < 0
+
+        // Cash sentinel findings
+        const cashFindings = agentFindings.filter((f) => f.agentName === 'cash_sentinel')
+
+        return (
+          <div className="card-static p-5">
+            <div className="flex items-start justify-between mb-1 flex-wrap gap-2">
+              <div>
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+                  Cash Flow Projection
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                  Running cash balance through fiscal year end
+                </p>
+              </div>
+              {goesNegative && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-200">
+                  <AlertTriangle size={12} /> Cash goes negative
+                </span>
+              )}
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="cashActualGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#1e3a5f" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#1e3a5f" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="cashProjGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis
+                  tickFormatter={(v) => {
+                    if (v >= 1_000_000 || v <= -1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
+                    return `$${(v / 1000).toFixed(0)}K`
+                  }}
+                  tick={{ fontSize: 11 }}
+                  domain={[yMin, yMax]}
+                />
+                <Tooltip formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')} />
+                {/* Red zone: below 30-day threshold */}
+                <ReferenceArea y1={yMin} y2={concern30} fill="#fee2e2" fillOpacity={0.5} />
+                {/* Yellow zone: 30-45 day threshold */}
+                <ReferenceArea y1={concern30} y2={watch45} fill="#fef9c3" fillOpacity={0.4} />
+                {/* Threshold lines */}
+                <ReferenceLine y={concern30} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={1} />
+                <ReferenceLine y={watch45} stroke="#eab308" strokeDasharray="4 4" strokeWidth={1} />
+                {goesNegative && <ReferenceLine y={0} stroke="#991b1b" strokeWidth={1.5} />}
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Area type="monotone" dataKey="actual" stroke="#1e3a5f" fill="url(#cashActualGrad)" strokeWidth={2} name="Actual" connectNulls={false} />
+                <Area type="monotone" dataKey="projected" stroke="#6366f1" fill="url(#cashProjGrad)" strokeWidth={2} strokeDasharray="5 3" name="Projected" connectNulls />
+              </AreaChart>
+            </ResponsiveContainer>
+            <div className="flex items-center gap-4 mt-2 text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-100 ring-1 ring-red-200" /> Below 30 days</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-yellow-100 ring-1 ring-yellow-200" /> 30-45 days</span>
+              <span className="ml-auto">Based on current ${fmt(Math.round(monthlyBurn))}/mo burn rate + OSPI schedule</span>
+            </div>
+            {/* Cash Sentinel findings */}
+            {cashFindings.length > 0 && (
+              <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Bot size={13} style={{ color: 'var(--brand-500)' }} />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Cash Sentinel</span>
+                </div>
+                <div className="space-y-1.5">
+                  {cashFindings.slice(0, 3).map((f) => (
+                    <div key={f.id} className="flex items-start gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                        f.severity === 'action' ? 'bg-red-500' : f.severity === 'concern' ? 'bg-orange-500' : 'bg-yellow-500'
+                      }`} />
+                      <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{f.summary}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Alerts Panel ─────────────────────────────────────────────────── */}
       {enrichedAlerts.length > 0 && (
@@ -637,34 +778,78 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="card-static p-5">
-        <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Budget vs. Actuals — Top Categories</h2>
-        <ResponsiveContainer width="100%" height={Math.max(200, Math.min(financialData.categories.length, 8) * 40 + 40)}>
-          <BarChart
-            data={[...financialData.categories].sort((a, b) => b.budget - a.budget).slice(0, 8)}
-            layout="vertical"
-            margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
-            barCategoryGap="20%"
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
-            <XAxis type="number" tickFormatter={(v) => fmt(Number(v))} tick={{ fontSize: 11 }} />
-            <YAxis
-              type="category"
-              dataKey="name"
-              tick={{ fontSize: 11 }}
-              width={120}
-              tickFormatter={(v: string) => v.length > 16 ? v.slice(0, 15) + '…' : v}
-            />
-            <Tooltip
-              formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')}
-              labelStyle={{ fontWeight: 600, fontSize: 12 }}
-            />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="budget" fill="#e2e8f0" name="Budget" radius={[0, 3, 3, 0]} barSize={14} />
-            <Bar dataKey="ytdActuals" fill="#1e3a5f" name="YTD Actuals" radius={[0, 3, 3, 0]} barSize={14} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      {/* ── Where You're Running Over ──────────────────────────────────── */}
+      {(() => {
+        const expectedSpend = (c: { budget: number }) => Math.round(c.budget * PACE)
+        const overCategories = financialData.categories
+          .map((c) => {
+            const expected = expectedSpend(c)
+            const overspend = c.ytdActuals - expected
+            const status = deriveStatus(c.burnRate)
+            return { ...c, expected, overspend, derivedStatus: status }
+          })
+          .filter((c) => c.overspend > 0 && c.derivedStatus !== 'ok')
+          .sort((a, b) => b.overspend - a.overspend)
+          .slice(0, 5)
+
+        const maxOverspend = overCategories.length > 0 ? overCategories[0].overspend : 0
+
+        const barColor: Record<string, string> = {
+          action: '#ef4444',
+          concern: '#f97316',
+          watch: '#eab308',
+        }
+
+        return (
+          <div className="card-static p-5">
+            <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+              Where You&apos;re Running Over
+            </h2>
+            {overCategories.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-10">
+                <CheckCircle2 size={20} className="text-green-500" />
+                <span className="text-sm font-medium text-green-700">All categories on track</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {overCategories.map((c) => {
+                  const pct = maxOverspend > 0 ? (c.overspend / maxOverspend) * 100 : 0
+                  const color = barColor[c.derivedStatus] ?? '#94a3b8'
+                  return (
+                    <div key={c.name} className="flex items-center gap-3">
+                      <span className="text-xs font-medium text-gray-700 w-28 sm:w-36 truncate shrink-0 text-right">{c.name}</span>
+                      <div className="flex-1 relative h-5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-full transition-all"
+                          style={{ width: `${Math.max(pct, 4)}%`, backgroundColor: color }}
+                        />
+                        {/* pace marker */}
+                        <div
+                          className="absolute top-0 bottom-0 w-px"
+                          style={{
+                            left: `${maxOverspend > 0 ? Math.min((c.expected / (c.expected + maxOverspend)) * 100, 95) : 50}%`,
+                            backgroundColor: '#1e3a5f',
+                            opacity: 0.4,
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs font-bold tabular-nums w-16 sm:w-20 text-right shrink-0" style={{ color }}>
+                        +{fmt(c.overspend)}
+                      </span>
+                    </div>
+                  )
+                })}
+                <div className="flex items-center gap-4 mt-1 pt-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                  <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /><span className="text-[10px] text-gray-500">Action</span></div>
+                  <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /><span className="text-[10px] text-gray-500">Concern</span></div>
+                  <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /><span className="text-[10px] text-gray-500">Watch</span></div>
+                  <div className="flex items-center gap-1.5 ml-auto"><span className="w-3 h-px bg-[#1e3a5f] opacity-40" /><span className="text-[10px] text-gray-500">Expected pace</span></div>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
     </div>
   )

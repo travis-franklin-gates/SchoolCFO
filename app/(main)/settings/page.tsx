@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react'
 import { Plus, Trash2, Check, Zap, Pencil, X, Bell } from 'lucide-react'
 import { useStore, type OtherGrant, type OtherGrantRestrictions } from '@/lib/store'
 import SchoolContextManager from '@/components/SchoolContextManager'
+import GradeSpanSelector from '@/components/GradeSpanSelector'
 
 // ── Quick-add presets for common philanthropic/federal grants ──────────────────
 
@@ -309,7 +310,10 @@ export default function SettingsPage() {
     updateSchoolProfile({
       name: profile.name,
       authorizer: profile.authorizer,
-      gradeConfig: profile.gradeConfig,
+      gradesCurrentFirst: profile.gradesCurrentFirst,
+      gradesCurrentLast: profile.gradesCurrentLast,
+      gradesBuildoutFirst: profile.gradesBuildoutFirst,
+      gradesBuildoutLast: profile.gradesBuildoutLast,
       currentFTES: Number(profile.currentFTES),
       priorYearFTES: Number(profile.priorYearFTES),
       openingCashBalance: Number(profile.openingCashBalance),
@@ -472,17 +476,26 @@ export default function SettingsPage() {
               className={inputCls}
             />
           </div>
-          <div>
-            <label className={labelCls}>Grade Configuration</label>
-            <input
-              type="text"
-              value={profile.gradeConfig}
-              onChange={(e) => setProfile({ ...profile, gradeConfig: e.target.value })}
-              placeholder="e.g. K-5"
-              className={inputCls}
+          <div className="col-span-2">
+            <GradeSpanSelector
+              label="Grades Currently Served"
+              firstGrade={profile.gradesCurrentFirst}
+              lastGrade={profile.gradesCurrentLast}
+              onFirstChange={(v) => setProfile({ ...profile, gradesCurrentFirst: v })}
+              onLastChange={(v) => setProfile({ ...profile, gradesCurrentLast: v })}
+              inputCls={inputCls}
             />
           </div>
-          <div />
+          <div className="col-span-2">
+            <GradeSpanSelector
+              label="Grades at Full Build-out"
+              firstGrade={profile.gradesBuildoutFirst}
+              lastGrade={profile.gradesBuildoutLast}
+              onFirstChange={(v) => setProfile({ ...profile, gradesBuildoutFirst: v })}
+              onLastChange={(v) => setProfile({ ...profile, gradesBuildoutLast: v })}
+              inputCls={inputCls}
+            />
+          </div>
           <div>
             <label className={labelCls}>Current Year FTES</label>
             <input

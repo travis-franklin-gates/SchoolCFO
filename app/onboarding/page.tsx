@@ -31,6 +31,7 @@ import {
   type SchoolCFOField,
 } from '@/lib/uploadPipeline'
 import { currentMonthKey } from '@/lib/fiscalYear'
+import GradeSpanSelector from '@/components/GradeSpanSelector'
 
 const STEPS = [
   { key: 'profile', label: 'School Profile', icon: School },
@@ -48,8 +49,6 @@ const AUTHORIZER_OPTIONS = [
   'Tacoma Public Schools',
   'Other',
 ]
-
-const GRADE_OPTIONS = ['K-5', 'K-8', '6-8', '9-12', 'K-12']
 
 const FIELD_OPTIONS: { value: SchoolCFOField; label: string }[] = [
   { value: 'category', label: 'Category' },
@@ -81,7 +80,10 @@ export default function GuidedOnboardingPage() {
   // ── Step 1: School Profile ──
   const [name, setName] = useState('')
   const [authorizer, setAuthorizer] = useState(AUTHORIZER_OPTIONS[0])
-  const [gradeConfig, setGradeConfig] = useState('K-5')
+  const [gradesCurrentFirst, setGradesCurrentFirst] = useState('K')
+  const [gradesCurrentLast, setGradesCurrentLast] = useState('5')
+  const [gradesBuildoutFirst, setGradesBuildoutFirst] = useState('K')
+  const [gradesBuildoutLast, setGradesBuildoutLast] = useState('5')
   const [currentFtes, setCurrentFtes] = useState('')
   const [priorYearFtes, setPriorYearFtes] = useState('')
 
@@ -123,7 +125,7 @@ export default function GuidedOnboardingPage() {
 
       const { data: school } = await supabase
         .from('schools')
-        .select('id, name, authorizer, grade_config, current_ftes, prior_year_ftes, next_board_meeting, next_finance_committee, onboarding_completed')
+        .select('id, name, authorizer, grades_current_first, grades_current_last, grades_buildout_first, grades_buildout_last, current_ftes, prior_year_ftes, next_board_meeting, next_finance_committee, onboarding_completed')
         .eq('user_id', user.id)
         .single()
 
@@ -136,7 +138,10 @@ export default function GuidedOnboardingPage() {
         setSchoolId(school.id)
         setName(school.name || '')
         setAuthorizer(school.authorizer || AUTHORIZER_OPTIONS[0])
-        setGradeConfig(school.grade_config || 'K-5')
+        setGradesCurrentFirst(school.grades_current_first || 'K')
+        setGradesCurrentLast(school.grades_current_last || '5')
+        setGradesBuildoutFirst(school.grades_buildout_first || 'K')
+        setGradesBuildoutLast(school.grades_buildout_last || '5')
         setCurrentFtes(school.current_ftes ? String(school.current_ftes) : '')
         setPriorYearFtes(school.prior_year_ftes ? String(school.prior_year_ftes) : '')
         setNextBoardMeeting(school.next_board_meeting || '')
@@ -165,7 +170,10 @@ export default function GuidedOnboardingPage() {
       const payload = {
         name: name.trim(),
         authorizer,
-        grade_config: gradeConfig,
+        grades_current_first: gradesCurrentFirst,
+        grades_current_last: gradesCurrentLast,
+        grades_buildout_first: gradesBuildoutFirst,
+        grades_buildout_last: gradesBuildoutLast,
         current_ftes: parseFloat(currentFtes) || 0,
         prior_year_ftes: parseFloat(priorYearFtes) || 0,
       }
@@ -297,7 +305,10 @@ export default function GuidedOnboardingPage() {
           schoolProfile: {
             name,
             authorizer,
-            gradeConfig,
+            gradesCurrentFirst,
+            gradesCurrentLast,
+            gradesBuildoutFirst,
+            gradesBuildoutLast,
             currentFTES: parseFloat(currentFtes) || 0,
             priorYearFTES: parseFloat(priorYearFtes) || 0,
             nextBoardMeeting,
@@ -501,21 +512,27 @@ export default function GuidedOnboardingPage() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  Grade configuration
-                </label>
-                <select
-                  value={gradeConfig}
-                  onChange={(e) => setGradeConfig(e.target.value)}
-                  className={inputCls}
-                  style={inputStyle}
-                >
-                  {GRADE_OPTIONS.map((g) => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                </select>
-              </div>
+              <GradeSpanSelector
+                label="Grades currently served"
+                description="The grade levels your school serves this year"
+                firstGrade={gradesCurrentFirst}
+                lastGrade={gradesCurrentLast}
+                onFirstChange={setGradesCurrentFirst}
+                onLastChange={setGradesCurrentLast}
+                inputCls={inputCls}
+                inputStyle={inputStyle}
+              />
+
+              <GradeSpanSelector
+                label="Grades at full build-out"
+                description="The grade levels your school will serve when fully grown"
+                firstGrade={gradesBuildoutFirst}
+                lastGrade={gradesBuildoutLast}
+                onFirstChange={setGradesBuildoutFirst}
+                onLastChange={setGradesBuildoutLast}
+                inputCls={inputCls}
+                inputStyle={inputStyle}
+              />
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

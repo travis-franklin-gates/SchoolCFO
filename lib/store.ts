@@ -15,12 +15,30 @@ export type PacketStatus = 'not-started' | 'draft' | 'finalized'
 export interface SchoolProfile {
   name: string
   authorizer: string
-  gradeConfig: string
+  gradesCurrentFirst: string
+  gradesCurrentLast: string
+  gradesBuildoutFirst: string
+  gradesBuildoutLast: string
   currentFTES: number
   priorYearFTES: number
   nextBoardMeeting: string
   nextFinanceCommittee: string
   openingCashBalance: number
+}
+
+/** Format a grade span pair as "K-5" style string */
+export function formatGradeSpan(first: string, last: string): string {
+  if (!first && !last) return ''
+  if (first === last) return first
+  return `${first}-${last}`
+}
+
+/** Parse a legacy "K-5" style grade config into first/last */
+export function parseGradeConfig(config: string): { first: string; last: string } {
+  if (!config) return { first: '', last: '' }
+  const parts = config.split('-')
+  if (parts.length === 2) return { first: parts[0], last: parts[1] }
+  return { first: config, last: config }
 }
 
 export interface BudgetCategory {
@@ -375,7 +393,10 @@ export const useStore = create<AppState>((set, get) => ({
   schoolProfile: {
     name: 'Cascade Charter School',
     authorizer: 'WA Charter School Commission',
-    gradeConfig: 'K-8',
+    gradesCurrentFirst: 'K',
+    gradesCurrentLast: '8',
+    gradesBuildoutFirst: 'K',
+    gradesBuildoutLast: '8',
     currentFTES: 432,
     priorYearFTES: 418,
     nextBoardMeeting: '2026-03-26',
@@ -437,7 +458,10 @@ export const useStore = create<AppState>((set, get) => ({
         schoolProfile: {
           name: schoolName,
           authorizer: school.authorizer || existing.authorizer,
-          gradeConfig: school.grade_config || existing.gradeConfig,
+          gradesCurrentFirst: school.grades_current_first || existing.gradesCurrentFirst,
+          gradesCurrentLast: school.grades_current_last || existing.gradesCurrentLast,
+          gradesBuildoutFirst: school.grades_buildout_first || existing.gradesBuildoutFirst,
+          gradesBuildoutLast: school.grades_buildout_last || existing.gradesBuildoutLast,
           currentFTES: Number(school.current_ftes) || existing.currentFTES,
           priorYearFTES: Number(school.prior_year_ftes) || existing.priorYearFTES,
           nextBoardMeeting: school.next_board_meeting || existing.nextBoardMeeting,
@@ -698,7 +722,10 @@ export const useStore = create<AppState>((set, get) => ({
           .update({
             name: updated.name,
             authorizer: updated.authorizer,
-            grade_config: updated.gradeConfig,
+            grades_current_first: updated.gradesCurrentFirst,
+            grades_current_last: updated.gradesCurrentLast,
+            grades_buildout_first: updated.gradesBuildoutFirst,
+            grades_buildout_last: updated.gradesBuildoutLast,
             current_ftes: updated.currentFTES,
             prior_year_ftes: updated.priorYearFTES,
             next_board_meeting: updated.nextBoardMeeting || null,
@@ -1370,7 +1397,10 @@ export const useStore = create<AppState>((set, get) => ({
     schoolProfile: {
       name: '',
       authorizer: 'WA Charter School Commission',
-      gradeConfig: 'K-8',
+      gradesCurrentFirst: '',
+      gradesCurrentLast: '',
+      gradesBuildoutFirst: '',
+      gradesBuildoutLast: '',
       currentFTES: 0,
       priorYearFTES: 0,
       nextBoardMeeting: '',

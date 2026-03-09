@@ -31,7 +31,8 @@ export async function POST(req: NextRequest) {
     }
 
     const spName = String(schoolProfile?.name ?? 'the school')
-    const spGrade = String(schoolProfile?.gradeConfig ?? '')
+    const spGradeCurrent = `${schoolProfile?.gradesCurrentFirst ?? ''}${schoolProfile?.gradesCurrentLast ? '-' + schoolProfile.gradesCurrentLast : ''}`
+    const spGradeBuildout = `${schoolProfile?.gradesBuildoutFirst ?? ''}${schoolProfile?.gradesBuildoutLast ? '-' + schoolProfile.gradesBuildoutLast : ''}`
     const spFtes = Number(schoolProfile?.currentFTES ?? 0)
 
     const fdBudget = Number(financialData?.totalBudget ?? 0)
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     const flagged = categories.filter((c) => c.alertStatus && c.alertStatus !== 'ok')
 
-    const context = `SCHOOL: ${spName} (${spGrade}, ${spFtes} FTES)
+    const context = `SCHOOL: ${spName} (${spGradeCurrent}${spGradeBuildout && spGradeBuildout !== spGradeCurrent ? `, build-out ${spGradeBuildout}` : ''}, ${spFtes} FTES)
 DATA THROUGH: ${monthLabel} — ${pacePercent}% expected budget pace
 
 FINANCIAL POSITION:

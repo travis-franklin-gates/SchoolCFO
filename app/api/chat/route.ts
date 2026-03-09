@@ -63,7 +63,10 @@ function buildSystemPrompt(
   const sp = schoolProfile as {
     name: string
     authorizer: string
-    gradeConfig: string
+    gradesCurrentFirst: string
+    gradesCurrentLast: string
+    gradesBuildoutFirst: string
+    gradesBuildoutLast: string
     currentFTES: number
   }
 
@@ -108,7 +111,8 @@ If the user has attached a document (vendor proposal, contract, invoice, spreads
 CURRENT SCHOOL:
 School: ${sp.name}
 Authorizer: ${sp.authorizer}
-Grade Configuration: ${sp.gradeConfig}
+Grades Currently Served: ${sp.gradesCurrentFirst}${sp.gradesCurrentLast ? '-' + sp.gradesCurrentLast : ''}
+Grades at Full Build-out: ${sp.gradesBuildoutFirst}${sp.gradesBuildoutLast ? '-' + sp.gradesBuildoutLast : ''}
 Current FTES: ${sp.currentFTES}
 
 FINANCIAL SNAPSHOT (${monthsElapsed} of ${totalMonths} months elapsed — ${pacePercent}% through fiscal year):

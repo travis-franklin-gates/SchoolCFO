@@ -61,6 +61,7 @@ const FIELD_PATTERNS: Record<Exclude<SchoolCFOField, 'ignore'>, RegExp[]> = {
     /^planned( amount)?$/i,
   ],
   ytdActuals: [
+    // Existing exact-match patterns
     /^actuals?$/i,
     /^ytd actuals?$/i,
     /^(year[- ]to[- ]date|ytd)$/i,
@@ -68,6 +69,14 @@ const FIELD_PATTERNS: Record<Exclude<SchoolCFOField, 'ignore'>, RegExp[]> = {
     /^(total )?expend(ed|itures?)$/i,
     /^expenses?$/i,
     /^spent$/i,
+    // Month-named columns (e.g. "March", "March Actuals", "Jan Amount")
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
+    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i,
+    // Generic actuals/period columns
+    /actual/i,
+    /period/i,
+    /\bamount\b/i,
+    /\bbalance\b/i,
   ],
   fund: [
     /^fund( code)?$/i,

@@ -26,11 +26,14 @@ export interface ParseWarning {
   originalValue: string
 }
 
+export type AccountType = 'revenue' | 'expense'
+
 export interface MappedCategory {
   category: string
   budget: number
   ytdActuals: number
   fund?: string
+  accountType: AccountType
 }
 
 export interface MappedGrant {
@@ -171,6 +174,15 @@ function isCashBalanceRow(
   return false
 }
 
+/** Classify a raw account type string as revenue or expense. Defaults to expense. */
+const REVENUE_PATTERNS = [/^revenue$/i, /^income$/i, /^receipts?$/i, /^inflow$/i]
+
+function classifyAccountType(raw: string): AccountType {
+  const trimmed = raw.trim()
+  if (REVENUE_PATTERNS.some((p) => p.test(trimmed))) return 'revenue'
+  return 'expense'
+}
+
 /** Convert "hello world" → "Hello World" for category normalization. */
 function toTitleCase(str: string): string {
   return str
@@ -236,7 +248,7 @@ export function applyMappings(
 
   const grouped = new Map<
     string,
-    { budget: number; ytdActuals: number; fund?: string }
+    { budget: number; ytdActuals: number; fund?: string; accountType: AccountType }
   >()
 
   let cashBalanceRowsSkipped = 0
@@ -262,12 +274,16 @@ export function applyMappings(
     const fund =
       fundCol >= 0 ? String(row[fundCol] ?? '').trim() || undefined : undefined
 
+    // Classify as revenue or expense from the Account Type column (defaults to expense)
+    const acctTypeRaw = accountTypeCol >= 0 ? String(row[accountTypeCol] ?? '').trim() : ''
+    const accountType = classifyAccountType(acctTypeRaw)
+
     if (grouped.has(category)) {
       const existing = grouped.get(category)!
       existing.budget += budget
       existing.ytdActuals += ytdActuals
     } else {
-      grouped.set(category, { budget, ytdActuals, fund })
+      grouped.set(category, { budget, ytdActuals, fund, accountType })
     }
   }
 

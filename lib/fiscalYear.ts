@@ -97,19 +97,22 @@ export function cumulativeOspiPct(monthKey: string): number {
 }
 
 /**
- * Calculate dynamic cash position for a given month.
- * cash = openingCash + (annualBudget * cumulativeOspiPct/100) - ytdSpending
- * Returns { cashOnHand, daysOfReserves }.
+ * Calculate cash position from actual revenue and expense data.
+ * cash = openingCash + ytdRevenue - ytdExpenses
+ *
+ * @param openingCash    Opening cash balance from school profile (September 1 balance)
+ * @param ytdRevenue     Sum of YTD actuals for all revenue-type categories
+ * @param ytdExpenses    Sum of YTD actuals for all expense-type categories
+ * @param annualExpenseBudget  Total annual expense budget (used only for days-of-reserves calc)
  */
 export function calculateCashPosition(
   openingCash: number,
-  annualBudget: number,
-  ytdSpending: number,
-  monthKey: string
+  ytdRevenue: number,
+  ytdExpenses: number,
+  annualExpenseBudget: number,
 ): { cashOnHand: number; daysOfReserves: number } {
-  const revenueReceived = annualBudget * (cumulativeOspiPct(monthKey) / 100)
-  const cashOnHand = Math.round(openingCash + revenueReceived - ytdSpending)
-  const dailyBurn = annualBudget > 0 ? annualBudget / 365 : 1
+  const cashOnHand = Math.round(openingCash + ytdRevenue - ytdExpenses)
+  const dailyBurn = annualExpenseBudget > 0 ? annualExpenseBudget / 365 : 1
   const daysOfReserves = dailyBurn > 0 ? Math.round(cashOnHand / dailyBurn) : 0
   return { cashOnHand, daysOfReserves }
 }

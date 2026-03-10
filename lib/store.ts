@@ -41,6 +41,8 @@ export function parseGradeConfig(config: string): { first: string; last: string 
   return { first: config, last: config }
 }
 
+export type AccountType = 'revenue' | 'expense'
+
 export interface BudgetCategory {
   name: string
   budget: number
@@ -48,12 +50,15 @@ export interface BudgetCategory {
   burnRate: number
   projectedYearEnd: number
   alertStatus: BudgetAlertStatus
+  accountType: AccountType
   narrative?: string
 }
 
 export interface FinancialSnapshot {
   totalBudget: number
   ytdSpending: number
+  ytdRevenue: number
+  ytdExpenses: number
   cashOnHand: number
   daysOfReserves: number
   variancePercent: number
@@ -101,6 +106,8 @@ export interface MonthlySnapshot {
   financialSummary: {
     totalBudget: number
     totalActuals: number
+    ytdRevenue: number
+    ytdExpenses: number
     cashOnHand: number
     daysOfReserves: number
     variancePercent: number
@@ -233,6 +240,7 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     burnRate: 74.0,
     projectedYearEnd: 3933000,  // ytdActuals / (7/12)
     alertStatus: 'concern',     // +16pp over 58% pace
+    accountType: 'expense',
     narrative:
       "Personnel is tracking 16 percentage points ahead of pace at 74% of the annual budget (expected 58% through March). At the current rate, costs are projected to reach $3.93M against a $3.1M budget. Investigate substitute and overtime usage before Q4 staffing decisions are finalized.",
   },
@@ -243,6 +251,7 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     burnRate: 71.0,
     projectedYearEnd: 754600,   // ytdActuals / (7/12)
     alertStatus: 'concern',     // +13pp over 58% pace
+    accountType: 'expense',
     narrative:
       "Benefits costs are running 13 percentage points ahead of pace at 71% of budget (expected 58% through March). At this trajectory, benefits are projected to reach $755K against a $620K budget. Verify whether benefit elections or employer contributions changed mid-year and confirm the full-year impact.",
   },
@@ -253,6 +262,7 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     burnRate: 79.0,
     projectedYearEnd: 656800,   // ytdActuals / (7/12)
     alertStatus: 'action',      // +21pp over 58% pace
+    accountType: 'expense',
     narrative:
       "Contracted services require immediate attention — at 79% of budget with 5 months remaining, you're 21 percentage points over pace (expected 58%). At the current rate, you're projected to exceed this line by $172K. Review all active vendor contracts and suspend any discretionary engagements that can be deferred to next fiscal year.",
   },
@@ -263,6 +273,7 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     burnRate: 81.0,
     projectedYearEnd: 274900,   // ytdActuals / (7/12)
     alertStatus: 'action',      // +23pp over 58% pace
+    accountType: 'expense',
     narrative:
       "Supplies spending requires immediate action — at 81% of budget with 5 months remaining (expected 58%), you're projected to overspend by $77K. Implement a purchase freeze on non-essential supplies today and redirect any remaining classroom budgets to priority items only.",
   },
@@ -273,6 +284,7 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     burnRate: 65.0,
     projectedYearEnd: 347700,   // ytdActuals / (7/12)
     alertStatus: 'watch',       // +7pp over 58% pace
+    accountType: 'expense',
     narrative:
       "Facilities is running 7 percentage points ahead of pace at 65% of budget (expected 58% through March). At the current run rate, facilities spending is projected to reach $348K against a $312K budget. Review maintenance contracts and defer any discretionary work through year-end.",
   },
@@ -283,6 +295,7 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     burnRate: 61.0,
     projectedYearEnd: 154800,   // ytdActuals / (7/12)
     alertStatus: 'ok',          // +3pp — within normal range
+    accountType: 'expense',
     narrative: undefined,
   },
   {
@@ -292,6 +305,7 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     burnRate: 63.0,
     projectedYearEnd: 199800,   // ytdActuals / (7/12)
     alertStatus: 'ok',          // +5pp — at threshold, ok
+    accountType: 'expense',
     narrative: undefined,
   },
   {
@@ -301,6 +315,7 @@ const SEED_CATEGORIES: BudgetCategory[] = [
     burnRate: 58.0,
     projectedYearEnd: 101400,   // ytdActuals / (7/12)
     alertStatus: 'ok',          // exactly at pace
+    accountType: 'expense',
     narrative: undefined,
   },
 ]
@@ -361,6 +376,8 @@ const SEED_SNAPSHOT: MonthlySnapshot = {
   financialSummary: {
     totalBudget: 5150000,
     totalActuals: 3746520,
+    ytdRevenue: 0,
+    ytdExpenses: 3746520,
     cashOnHand: 892000,
     daysOfReserves: 63,
     variancePercent: 24.7,  // (totalActuals − expected) / expected × 100 at 58% pace
@@ -406,6 +423,8 @@ export const useStore = create<AppState>((set, get) => ({
   financialData: {
     totalBudget: 5150000,
     ytdSpending: 3746520,
+    ytdRevenue: 0,
+    ytdExpenses: 3746520,
     cashOnHand: 892000,
     daysOfReserves: 63,
     variancePercent: 9.1,
@@ -490,6 +509,8 @@ export const useStore = create<AppState>((set, get) => ({
         const summary = row.financial_summary as {
           totalBudget: number
           totalActuals: number
+          ytdRevenue?: number
+          ytdExpenses?: number
           cashOnHand: number
           daysOfReserves: number
           variancePercent: number
@@ -497,6 +518,10 @@ export const useStore = create<AppState>((set, get) => ({
           grants?: Grant[]
           alerts?: Alert[]
         }
+        // Backwards compat: older snapshots may not have ytdRevenue/ytdExpenses.
+        // Fall back to 0 revenue and totalActuals as expenses.
+        const ytdRevenue = summary.ytdRevenue ?? 0
+        const ytdExpenses = summary.ytdExpenses ?? summary.totalActuals
         monthlySnapshots[row.month_key] = {
           month: row.month_key,
           label: row.label,
@@ -509,6 +534,8 @@ export const useStore = create<AppState>((set, get) => ({
           financialSummary: {
             totalBudget: summary.totalBudget,
             totalActuals: summary.totalActuals,
+            ytdRevenue,
+            ytdExpenses,
             cashOnHand: summary.cashOnHand,
             daysOfReserves: summary.daysOfReserves,
             variancePercent: summary.variancePercent,
@@ -524,13 +551,13 @@ export const useStore = create<AppState>((set, get) => ({
       snapshotGrantSpent = new Map(
         latestSnap.grants.map((g) => [g.name.toLowerCase(), g.spent])
       )
-      // Calculate dynamic cash position from opening balance + OSPI revenue - spending
+      // Calculate cash position: opening + ytdRevenue - ytdExpenses
       const openingCash = get().schoolProfile.openingCashBalance
       const { cashOnHand: calcCash, daysOfReserves: calcDays } = calculateCashPosition(
         openingCash,
+        latestSnap.financialSummary.ytdRevenue,
+        latestSnap.financialSummary.ytdExpenses,
         latestSnap.financialSummary.totalBudget,
-        latestSnap.financialSummary.totalActuals,
-        latestKey
       )
       set({
         monthlySnapshots,
@@ -538,6 +565,8 @@ export const useStore = create<AppState>((set, get) => ({
         financialData: {
           totalBudget: latestSnap.financialSummary.totalBudget,
           ytdSpending: latestSnap.financialSummary.totalActuals,
+          ytdRevenue: latestSnap.financialSummary.ytdRevenue,
+          ytdExpenses: latestSnap.financialSummary.ytdExpenses,
           cashOnHand: calcCash,
           daysOfReserves: calcDays,
           variancePercent: latestSnap.financialSummary.variancePercent,
@@ -556,6 +585,8 @@ export const useStore = create<AppState>((set, get) => ({
         financialData: {
           totalBudget: 0,
           ytdSpending: 0,
+          ytdRevenue: 0,
+          ytdExpenses: 0,
           cashOnHand: 0,
           daysOfReserves: 0,
           variancePercent: 0,
@@ -746,15 +777,17 @@ export const useStore = create<AppState>((set, get) => ({
     const openingCash = get().schoolProfile.openingCashBalance
     const { cashOnHand, daysOfReserves } = calculateCashPosition(
       openingCash,
+      snap.financialSummary.ytdRevenue,
+      snap.financialSummary.ytdExpenses,
       snap.financialSummary.totalBudget,
-      snap.financialSummary.totalActuals,
-      month
     )
     set({
       activeMonth: month,
       financialData: {
         totalBudget: snap.financialSummary.totalBudget,
         ytdSpending: snap.financialSummary.totalActuals,
+        ytdRevenue: snap.financialSummary.ytdRevenue,
+        ytdExpenses: snap.financialSummary.ytdExpenses,
         cashOnHand,
         daysOfReserves,
         variancePercent: snap.financialSummary.variancePercent,
@@ -781,11 +814,20 @@ export const useStore = create<AppState>((set, get) => ({
     const newState: Partial<AppState> = { monthlySnapshots: updated, activeMonth: newActive }
 
     if (newSnap) {
+      const openingCash = get().schoolProfile.openingCashBalance
+      const { cashOnHand, daysOfReserves } = calculateCashPosition(
+        openingCash,
+        newSnap.financialSummary.ytdRevenue,
+        newSnap.financialSummary.ytdExpenses,
+        newSnap.financialSummary.totalBudget,
+      )
       newState.financialData = {
         totalBudget: newSnap.financialSummary.totalBudget,
         ytdSpending: newSnap.financialSummary.totalActuals,
-        cashOnHand: newSnap.financialSummary.cashOnHand,
-        daysOfReserves: newSnap.financialSummary.daysOfReserves,
+        ytdRevenue: newSnap.financialSummary.ytdRevenue,
+        ytdExpenses: newSnap.financialSummary.ytdExpenses,
+        cashOnHand,
+        daysOfReserves,
         variancePercent: newSnap.financialSummary.variancePercent,
         categories: newSnap.budgetCategories,
         monthlySpend: newSnap.monthlySpend,
@@ -1004,6 +1046,7 @@ export const useStore = create<AppState>((set, get) => ({
         burnRate: Math.round(burnRate * 10) / 10,
         projectedYearEnd,
         alertStatus,
+        accountType: cat.accountType ?? 'expense' as const,
         narrative: deriveNarrative(
           cat.category, cat.budget, cat.ytdActuals, burnRate, projectedYearEnd, alertStatus
         ),
@@ -1012,10 +1055,19 @@ export const useStore = create<AppState>((set, get) => ({
 
     const totalBudget = newCategories.reduce((s, c) => s + c.budget, 0)
     const totalActuals = newCategories.reduce((s, c) => s + c.ytdActuals, 0)
-    const expectedSpending = totalBudget * pace
-    const variancePercent = parseFloat(
-      (((totalActuals - expectedSpending) / expectedSpending) * 100).toFixed(1)
-    )
+    const ytdRevenue = newCategories
+      .filter((c) => c.accountType === 'revenue')
+      .reduce((s, c) => s + c.ytdActuals, 0)
+    const ytdExpenses = newCategories
+      .filter((c) => c.accountType === 'expense')
+      .reduce((s, c) => s + c.ytdActuals, 0)
+    const expenseBudget = newCategories
+      .filter((c) => c.accountType === 'expense')
+      .reduce((s, c) => s + c.budget, 0)
+    const expectedSpending = expenseBudget * pace
+    const variancePercent = expectedSpending > 0
+      ? parseFloat((((ytdExpenses - expectedSpending) / expectedSpending) * 100).toFixed(1))
+      : 0
 
     const existingAlerts = get().alerts
     const cashAlert = existingAlerts.find((a) => a.severity === 'critical')
@@ -1040,10 +1092,10 @@ export const useStore = create<AppState>((set, get) => ({
         })
       })
 
-    // Dynamic cash position: opening balance + OSPI revenue received - YTD spending
+    // Cash position: opening balance + actual revenue received - actual expenses
     const openingCash = get().schoolProfile.openingCashBalance
     const { cashOnHand, daysOfReserves } = calculateCashPosition(
-      openingCash, totalBudget, totalActuals, month
+      openingCash, ytdRevenue, ytdExpenses, expenseBudget
     )
 
     // Capture existing grants before modifying state — used for name-matching and UUID reuse.
@@ -1086,6 +1138,8 @@ export const useStore = create<AppState>((set, get) => ({
       financialSummary: {
         totalBudget,
         totalActuals,
+        ytdRevenue,
+        ytdExpenses,
         cashOnHand,
         daysOfReserves,
         variancePercent,
@@ -1100,6 +1154,8 @@ export const useStore = create<AppState>((set, get) => ({
         ...state.financialData,
         totalBudget,
         ytdSpending: totalActuals,
+        ytdRevenue,
+        ytdExpenses,
         cashOnHand,
         daysOfReserves,
         variancePercent,
@@ -1152,6 +1208,8 @@ export const useStore = create<AppState>((set, get) => ({
         const financialSummary = {
           totalBudget,
           totalActuals,
+          ytdRevenue,
+          ytdExpenses,
           cashOnHand,
           daysOfReserves,
           variancePercent,
@@ -1410,6 +1468,8 @@ export const useStore = create<AppState>((set, get) => ({
     financialData: {
       totalBudget: 0,
       ytdSpending: 0,
+      ytdRevenue: 0,
+      ytdExpenses: 0,
       cashOnHand: 0,
       daysOfReserves: 0,
       variancePercent: 0,

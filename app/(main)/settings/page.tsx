@@ -515,13 +515,13 @@ export default function SettingsPage() {
             />
           </div>
           <div className="col-span-2">
-            <label className={labelCls}>Opening Cash Balance</label>
-            <p className="text-xs text-gray-500 mb-1">Prior year ending cash balance — used as the starting point for cash position calculations</p>
+            <label className={labelCls}>Opening Cash Balance (September 1)</label>
+            <p className="text-xs text-gray-500 mb-1">Your cash on hand at the start of this fiscal year — used as the starting point for all cash position calculations</p>
             <input
               type="number"
               value={profile.openingCashBalance}
               onChange={(e) => setProfile({ ...profile, openingCashBalance: Number(e.target.value) })}
-              placeholder="e.g. 338000"
+              placeholder="e.g. 750000"
               className={inputCls}
             />
           </div>

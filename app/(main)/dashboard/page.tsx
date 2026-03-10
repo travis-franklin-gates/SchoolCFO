@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
-import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, OSPI_PCT, DEFAULT_OSPI_PCT, cumulativeOspiPct } from '@/lib/fiscalYear'
+import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
 
 function fmt(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
@@ -85,6 +85,7 @@ export default function DashboardPage() {
   const fetchedForRef = useRef<string | null>(null)
 
   const activeSnap = monthlySnapshots[activeMonth]
+  const snapshotCount = Object.keys(monthlySnapshots).length
   const cacheKey = `${activeMonth}:${activeSnap?.uploadedAt ?? ''}`
 
   useEffect(() => {
@@ -419,9 +420,9 @@ export default function DashboardPage() {
         >
           <div className="flex items-center justify-between mb-1">
             <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif', letterSpacing: '0.08em' }}>Active Alerts</p>
-            <AlertTriangle className={alerts.length > 0 ? 'text-amber-500' : 'text-gray-300'} size={16} />
+            <AlertTriangle className={actionCount + watchConcernCount > 0 ? 'text-amber-500' : 'text-gray-300'} size={16} />
           </div>
-          <p className="text-4xl font-extrabold text-gray-900 tracking-tight" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{alerts.length}</p>
+          <p className="text-4xl font-extrabold text-gray-900 tracking-tight" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{actionCount + watchConcernCount}</p>
           <p className="text-sm mt-1.5" style={{ color: 'var(--text-tertiary)' }}>items need attention</p>
           {(actionCount > 0 || watchConcernCount > 0) && (
             <div className="flex flex-wrap gap-1.5 mt-2.5">
@@ -477,22 +478,27 @@ export default function DashboardPage() {
         const openingCash = schoolProfile.openingCashBalance
         const totalBudget = financialData.totalBudget
         const fiscalMonths = getFiscalMonths()
-        const monthlyBurn = activeFiscalIdx > 0 ? financialData.ytdSpending / activeFiscalIdx : totalBudget / 12
+        const ytdRevenue = financialData.ytdRevenue
+        const ytdExpenses = financialData.ytdExpenses
+        const monthlyRevRate = activeFiscalIdx > 0 ? ytdRevenue / activeFiscalIdx : totalBudget / 12
+        const monthlyExpRate = activeFiscalIdx > 0 ? ytdExpenses / activeFiscalIdx : totalBudget / 12
         const dailyBurn = totalBudget > 0 ? totalBudget / 365 : 1
         const concern30 = Math.round(dailyBurn * 30)
         const watch45 = Math.round(dailyBurn * 45)
 
-        // Build month-by-month cash: opening + cumulative OSPI revenue - cumulative expenses
-        // For months through active: use actuals. For future months: project using monthly burn rate.
+        // Build month-by-month cash: opening + cumulative revenue - cumulative expenses
+        // For months through active: pro-rate actuals. For future months: project using monthly rates.
         const cashData = fiscalMonths.map((fm) => {
-          const revenue = totalBudget * (cumulativeOspiPct(fm.key) / 100)
+          let revenue: number
           let expenses: number
           if (fm.fiscalIndex <= activeFiscalIdx) {
-            // Actual months: pro-rate YTD actuals by OSPI weight
-            expenses = financialData.ytdSpending * (fm.fiscalIndex / activeFiscalIdx)
+            // Actual months: pro-rate YTD totals linearly
+            revenue = ytdRevenue * (fm.fiscalIndex / activeFiscalIdx)
+            expenses = ytdExpenses * (fm.fiscalIndex / activeFiscalIdx)
           } else {
-            // Projected months: actuals through current + burn rate for future
-            expenses = financialData.ytdSpending + monthlyBurn * (fm.fiscalIndex - activeFiscalIdx)
+            // Projected months: actuals through current + monthly rate for future
+            revenue = ytdRevenue + monthlyRevRate * (fm.fiscalIndex - activeFiscalIdx)
+            expenses = ytdExpenses + monthlyExpRate * (fm.fiscalIndex - activeFiscalIdx)
           }
           const cash = Math.round(openingCash + revenue - expenses)
           return {
@@ -531,7 +537,7 @@ export default function DashboardPage() {
                   Running cash balance through fiscal year end
                 </p>
               </div>
-              {goesNegative && (
+              {goesNegative && snapshotCount >= 3 && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-200">
                   <AlertTriangle size={12} /> Cash goes negative
                 </span>
@@ -576,7 +582,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4 mt-2 text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
               <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-100 ring-1 ring-red-200" /> Below 30 days</span>
               <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-yellow-100 ring-1 ring-yellow-200" /> 30-45 days</span>
-              <span className="ml-auto">Based on current ${fmt(Math.round(monthlyBurn))}/mo burn rate + OSPI schedule</span>
+              <span className="ml-auto">Based on current revenue &amp; expense run rates</span>
             </div>
             {/* Cash Sentinel findings */}
             {cashFindings.length > 0 && (
@@ -736,45 +742,61 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="card-static p-5">
           <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Spend Rate</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={spendData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-              <defs>
-                <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1e3a5f" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#1e3a5f" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tickFormatter={(v) => `$${v / 1000}K`} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Area type="monotone" dataKey="budget" stroke="#94a3b8" fill="none" strokeDasharray="4 4" name="Budget" />
-              <Area type="monotone" dataKey="amount" stroke="#1e3a5f" fill="url(#actualGrad)" strokeWidth={2} name="Actual" />
-            </AreaChart>
-          </ResponsiveContainer>
+          {snapshotCount >= 3 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={spendData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#1e3a5f" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#1e3a5f" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={(v) => `$${v / 1000}K`} tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Area type="monotone" dataKey="budget" stroke="#94a3b8" fill="none" strokeDasharray="4 4" name="Budget" />
+                <Area type="monotone" dataKey="amount" stroke="#1e3a5f" fill="url(#actualGrad)" strokeWidth={2} name="Actual" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[200px] text-center">
+              <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                Upload at least 3 months of data to see spend rate trends.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="card-static p-5">
           <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>Projections</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={projectionChartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-              <defs>
-                <linearGradient id="projGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.12} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tickFormatter={(v) => `$${v / 1000}K`} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Area type="monotone" dataKey="budget" stroke="#94a3b8" fill="none" strokeDasharray="4 4" name="Budget" />
-              <Area type="monotone" dataKey="actual" stroke="#1e3a5f" fill="none" strokeWidth={2} name="Actual" connectNulls={false} />
-              <Area type="monotone" dataKey="projected" stroke="#ef4444" fill="url(#projGrad)" strokeDasharray="5 3" strokeWidth={2} name="Projected" connectNulls />
-            </AreaChart>
-          </ResponsiveContainer>
+          {snapshotCount >= 3 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={projectionChartData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="projGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.12} />
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={(v) => `$${v / 1000}K`} tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Area type="monotone" dataKey="budget" stroke="#94a3b8" fill="none" strokeDasharray="4 4" name="Budget" />
+                <Area type="monotone" dataKey="actual" stroke="#1e3a5f" fill="none" strokeWidth={2} name="Actual" connectNulls={false} />
+                <Area type="monotone" dataKey="projected" stroke="#ef4444" fill="url(#projGrad)" strokeDasharray="5 3" strokeWidth={2} name="Projected" connectNulls />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[200px] text-center">
+              <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                Upload at least 3 months of data to see year-end projections.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

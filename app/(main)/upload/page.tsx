@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Zap,
   AlertTriangle,
+  Info,
   Download,
   RotateCcw,
   Award,
@@ -33,7 +34,7 @@ import {
 
 interface Toast {
   id: string
-  type: 'warning' | 'error'
+  type: 'info' | 'warning' | 'error'
   message: string
   action?: { label: string; onClick: () => void }
 }
@@ -222,9 +223,15 @@ export default function UploadPage() {
 
   const runMappingAndCollectWarnings = (mappings: ColumnMappingResult[]) => {
     const warnings: ParseWarning[] = []
-    const categories = applyMappings(mappings, allDataRows, warnings)
+    const { categories, cashBalanceRowsSkipped } = applyMappings(mappings, allDataRows, warnings)
     const grants = extractGrants(mappings, allDataRows, warnings)
     setMappedData(categories)
+    if (cashBalanceRowsSkipped > 0) {
+      addToast({
+        type: 'info',
+        message: 'Opening cash balance is managed in your school profile settings, not through uploads. That row was skipped.',
+      })
+    }
     setMappedGrants(grants)
     setParseWarnings(warnings)
     if (warnings.length > 0) {
@@ -1062,13 +1069,18 @@ export default function UploadPage() {
             <div
               key={toast.id}
               className={`rounded-lg border px-4 py-3 shadow-lg text-sm ${
-                toast.type === 'warning'
+                toast.type === 'info'
+                  ? 'bg-blue-50 border-blue-300 text-blue-900'
+                  : toast.type === 'warning'
                   ? 'bg-yellow-50 border-yellow-300 text-yellow-900'
                   : 'bg-red-50 border-red-300 text-red-900'
               }`}
             >
               <div className="flex items-start gap-2">
-                <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                {toast.type === 'info'
+                  ? <Info size={14} className="shrink-0 mt-0.5" />
+                  : <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                }
                 <div className="flex-1">
                   <p>{toast.message}</p>
                   {toast.action && (

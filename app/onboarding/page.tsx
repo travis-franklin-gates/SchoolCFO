@@ -75,6 +75,7 @@ export default function GuidedOnboardingPage() {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // ── Step 1: School Profile ──
@@ -259,11 +260,15 @@ export default function GuidedOnboardingPage() {
       setColumnMappings(mappings)
 
       // Auto-apply mappings
-      const mapped = applyMappings(mappings, dataRows)
+      const { categories: mapped, cashBalanceRowsSkipped } = applyMappings(mappings, dataRows)
       const grants = extractGrants(mappings, dataRows)
       setMappedData(mapped)
       setMappedGrants(grants)
       setUploadSuccess(true)
+
+      if (cashBalanceRowsSkipped > 0) {
+        setInfo('Opening cash balance is managed in your school profile settings, not through uploads. That row was skipped.')
+      }
     } catch {
       setError('Failed to parse the file. Please check the format and try again.')
     }
@@ -841,6 +846,20 @@ export default function GuidedOnboardingPage() {
             }}
           >
             {error}
+          </p>
+        )}
+
+        {info && (
+          <p
+            className="text-sm px-3.5 py-2.5 mt-5"
+            style={{
+              color: 'var(--brand-700)',
+              background: '#eef6ff',
+              border: '1px solid #c6ddf7',
+              borderRadius: 'var(--radius-sm)',
+            }}
+          >
+            {info}
           </p>
         )}
 

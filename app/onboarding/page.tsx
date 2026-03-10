@@ -125,7 +125,7 @@ export default function GuidedOnboardingPage() {
 
       const { data: school } = await supabase
         .from('schools')
-        .select('id, name, authorizer, grades_current_first, grades_current_last, grades_buildout_first, grades_buildout_last, current_ftes, prior_year_ftes, next_board_meeting, next_finance_committee, onboarding_completed')
+        .select('id, name, authorizer, grades_current_first, grades_current_last, grades_buildout_first, grades_buildout_last, current_ftes, prior_year_ftes, next_board_meeting, next_finance_committee, opening_cash_balance, onboarding_completed')
         .eq('user_id', user.id)
         .single()
 
@@ -146,6 +146,7 @@ export default function GuidedOnboardingPage() {
         setPriorYearFtes(school.prior_year_ftes ? String(school.prior_year_ftes) : '')
         setNextBoardMeeting(school.next_board_meeting || '')
         setNextFinanceCommittee(school.next_finance_committee || '')
+        setOpeningCashBalance(school.opening_cash_balance ? String(school.opening_cash_balance) : '')
       }
     })()
   }, [router])
@@ -168,6 +169,7 @@ export default function GuidedOnboardingPage() {
       if (!user) { setError('Session expired. Please sign in again.'); setSaving(false); return }
 
       const payload = {
+        user_id: user.id,
         name: name.trim(),
         authorizer,
         grades_current_first: gradesCurrentFirst,
@@ -178,18 +180,13 @@ export default function GuidedOnboardingPage() {
         prior_year_ftes: parseFloat(priorYearFtes) || 0,
       }
 
-      if (schoolId) {
-        const { error: updateErr } = await supabase.from('schools').update(payload).eq('id', schoolId)
-        if (updateErr) { setError(updateErr.message); setSaving(false); return }
-      } else {
-        const { data: inserted, error: insertErr } = await supabase
-          .from('schools')
-          .insert({ ...payload, user_id: user.id })
-          .select('id')
-          .single()
-        if (insertErr) { setError(insertErr.message); setSaving(false); return }
-        setSchoolId(inserted.id)
-      }
+      const { data: upserted, error: upsertErr } = await supabase
+        .from('schools')
+        .upsert(payload, { onConflict: 'user_id' })
+        .select('id')
+        .single()
+      if (upsertErr) { setError(upsertErr.message); setSaving(false); return }
+      if (!schoolId) setSchoolId(upserted.id)
       setSaving(false)
     }
 

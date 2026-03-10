@@ -200,13 +200,10 @@ export default function GuidedOnboardingPage() {
       }).eq('id', schoolId)
       if (updateErr) { setError(updateErr.message); setSaving(false); return }
 
-      // Save opening cash balance to the school_context table or schools table
-      // We'll use the opening_cash_balance column on schools (added in migration 005)
-      if (openingCashBalance) {
-        await supabase.from('schools').update({
-          opening_cash_balance: parseFloat(openingCashBalance) || 0,
-        }).eq('id', schoolId)
-      }
+      // Always write opening cash balance (even if 0 or empty)
+      await supabase.from('schools').update({
+        opening_cash_balance: parseFloat(openingCashBalance) || 0,
+      }).eq('id', schoolId)
       setSaving(false)
     }
 

@@ -466,7 +466,7 @@ export const useStore = create<AppState>((set, get) => ({
           priorYearFTES: Number(school.prior_year_ftes) || existing.priorYearFTES,
           nextBoardMeeting: school.next_board_meeting || existing.nextBoardMeeting,
           nextFinanceCommittee: school.next_finance_committee || existing.nextFinanceCommittee,
-          openingCashBalance: Number(school.opening_cash_balance) || existing.openingCashBalance,
+          openingCashBalance: school.opening_cash_balance != null ? Number(school.opening_cash_balance) : existing.openingCashBalance,
         },
         auditAgentsLastRun: school.audit_agents_last_run ?? null,
         auditReadinessScore: school.audit_readiness_score ?? null,

@@ -12,6 +12,8 @@ interface AuthFormProps {
   footerLinkText: string
   passwordMinLength?: number
   passwordPlaceholder?: string
+  confirmPassword?: string
+  onConfirmPasswordChange?: (v: string) => void
   error: string | null
   loading: boolean
   email: string
@@ -31,6 +33,8 @@ export default function AuthForm({
   footerLinkText,
   passwordMinLength,
   passwordPlaceholder,
+  confirmPassword,
+  onConfirmPasswordChange,
   error,
   loading,
   email,
@@ -124,6 +128,27 @@ export default function AuthForm({
               placeholder={passwordPlaceholder ?? '••••••••'}
             />
           </div>
+
+          {onConfirmPasswordChange !== undefined && (
+            <div>
+              <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                Confirm password
+              </label>
+              <input
+                type="password"
+                required
+                minLength={passwordMinLength}
+                value={confirmPassword ?? ''}
+                onChange={(e) => onConfirmPasswordChange(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-sm bg-white"
+                style={{
+                  border: '1px solid var(--border-default)',
+                  borderRadius: 'var(--radius-sm)',
+                }}
+                placeholder="Re-enter your password"
+              />
+            </div>
+          )}
 
           {error && (
             <p

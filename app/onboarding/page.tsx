@@ -354,26 +354,56 @@ export default function GuidedOnboardingPage() {
   // ── Finish Setup ──
   const finishSetup = async () => {
     setSaving(true)
+    setError(null)
 
-    // If they uploaded data, import it via the store
-    if (uploadSuccess && mappedData.length > 0 && schoolId) {
-      const { useStore } = await import('@/lib/store')
-      useStore.getState().setSchoolContext(
-        (await supabase.auth.getUser()).data.user!.id,
-        schoolId,
-      )
-      useStore.getState().importFinancialData(
-        mappedData,
-        currentMonthKey(),
-        uploadFileName,
-        allDataRows.length,
-        mappedGrants.length > 0 ? mappedGrants : undefined,
-      )
+    // Resolve the school ID — use state if available, otherwise look up by user_id
+    let resolvedSchoolId = schoolId
+    if (!resolvedSchoolId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError('Session expired. Please sign in again.'); setSaving(false); return }
+      const { data: school } = await supabase
+        .from('schools')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+      if (school) {
+        resolvedSchoolId = school.id
+        setSchoolId(school.id)
+      }
     }
 
-    // Mark onboarding complete
-    if (schoolId) {
-      await supabase.from('schools').update({ onboarding_completed: true }).eq('id', schoolId)
+    if (!resolvedSchoolId) {
+      setError('No school profile found. Please go back to Step 1 and save your school info.')
+      setSaving(false)
+      return
+    }
+
+    // If they uploaded data, import it via the store
+    if (uploadSuccess && mappedData.length > 0) {
+      const { useStore } = await import('@/lib/store')
+      const currentUser = (await supabase.auth.getUser()).data.user
+      if (currentUser) {
+        useStore.getState().setSchoolContext(currentUser.id, resolvedSchoolId)
+        useStore.getState().importFinancialData(
+          mappedData,
+          currentMonthKey(),
+          uploadFileName,
+          allDataRows.length,
+          mappedGrants.length > 0 ? mappedGrants : undefined,
+        )
+      }
+    }
+
+    // Mark onboarding complete — await and check for errors
+    const { error: completeErr } = await supabase
+      .from('schools')
+      .update({ onboarding_completed: true })
+      .eq('id', resolvedSchoolId)
+
+    if (completeErr) {
+      setError('Failed to save onboarding status. Please try again.')
+      setSaving(false)
+      return
     }
 
     setSaving(false)

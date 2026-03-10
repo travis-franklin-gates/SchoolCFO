@@ -379,7 +379,7 @@ const SEED_SNAPSHOT: MonthlySnapshot = {
     ytdRevenue: 0,
     ytdExpenses: 3746520,
     cashOnHand: 892000,
-    daysOfReserves: 63,
+    daysOfReserves: 50,
     variancePercent: 24.7,  // (totalActuals − expected) / expected × 100 at 58% pace
   },
   monthlySpend: SEED_MONTHLY_SPEND,
@@ -426,7 +426,7 @@ export const useStore = create<AppState>((set, get) => ({
     ytdRevenue: 0,
     ytdExpenses: 3746520,
     cashOnHand: 892000,
-    daysOfReserves: 63,
+    daysOfReserves: 50,
     variancePercent: 9.1,
     categories: SEED_CATEGORIES,
     monthlySpend: SEED_MONTHLY_SPEND,
@@ -553,11 +553,13 @@ export const useStore = create<AppState>((set, get) => ({
       )
       // Calculate cash position: opening + ytdRevenue - ytdExpenses
       const openingCash = get().schoolProfile.openingCashBalance
+      const latestFiscalIdx = fiscalIndexFromKey(latestKey)
+      const latestMonthlyBurn = latestFiscalIdx > 0 ? latestSnap.financialSummary.ytdExpenses / latestFiscalIdx : 0
       const { cashOnHand: calcCash, daysOfReserves: calcDays } = calculateCashPosition(
         openingCash,
         latestSnap.financialSummary.ytdRevenue,
         latestSnap.financialSummary.ytdExpenses,
-        latestSnap.financialSummary.totalBudget,
+        latestMonthlyBurn,
       )
       set({
         monthlySnapshots,
@@ -775,11 +777,13 @@ export const useStore = create<AppState>((set, get) => ({
     const snap = get().monthlySnapshots[month]
     if (!snap) return
     const openingCash = get().schoolProfile.openingCashBalance
+    const monthFiscalIdx = fiscalIndexFromKey(month)
+    const monthlyBurn = monthFiscalIdx > 0 ? snap.financialSummary.ytdExpenses / monthFiscalIdx : 0
     const { cashOnHand, daysOfReserves } = calculateCashPosition(
       openingCash,
       snap.financialSummary.ytdRevenue,
       snap.financialSummary.ytdExpenses,
-      snap.financialSummary.totalBudget,
+      monthlyBurn,
     )
     set({
       activeMonth: month,
@@ -815,11 +819,13 @@ export const useStore = create<AppState>((set, get) => ({
 
     if (newSnap) {
       const openingCash = get().schoolProfile.openingCashBalance
+      const newFiscalIdx = fiscalIndexFromKey(newActive)
+      const newMonthlyBurn = newFiscalIdx > 0 ? newSnap.financialSummary.ytdExpenses / newFiscalIdx : 0
       const { cashOnHand, daysOfReserves } = calculateCashPosition(
         openingCash,
         newSnap.financialSummary.ytdRevenue,
         newSnap.financialSummary.ytdExpenses,
-        newSnap.financialSummary.totalBudget,
+        newMonthlyBurn,
       )
       newState.financialData = {
         totalBudget: newSnap.financialSummary.totalBudget,
@@ -1094,8 +1100,9 @@ export const useStore = create<AppState>((set, get) => ({
 
     // Cash position: opening balance + actual revenue received - actual expenses
     const openingCash = get().schoolProfile.openingCashBalance
+    const monthlyExpenseBurn = fiscalIdx > 0 ? ytdExpenses / fiscalIdx : 0
     const { cashOnHand, daysOfReserves } = calculateCashPosition(
-      openingCash, ytdRevenue, ytdExpenses, expenseBudget
+      openingCash, ytdRevenue, ytdExpenses, monthlyExpenseBurn
     )
 
     // Capture existing grants before modifying state — used for name-matching and UUID reuse.

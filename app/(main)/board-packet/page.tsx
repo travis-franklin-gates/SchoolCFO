@@ -219,7 +219,9 @@ export default function BoardPacketPage() {
     } else if (fm.fiscalIndex > activeFiscalIdx) {
       runningBalance += net
       balance = runningBalance
-      days = Math.round((runningBalance / totalBudget) * 365)
+      // Use actual monthly burn rate (consistent with store calculation)
+      const monthlyBurn = activeFiscalIdx > 0 ? financialData.ytdExpenses / activeFiscalIdx : totalBudget / 12
+      days = monthlyBurn > 0 ? Math.round(runningBalance / monthlyBurn * 30) : 0
     }
 
     return { fm, ospiPct, revenue, expenses, net, balance, days, isLow, hasSnap: !!snap }

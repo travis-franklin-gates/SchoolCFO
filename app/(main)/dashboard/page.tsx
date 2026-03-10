@@ -480,14 +480,18 @@ export default function DashboardPage() {
         const fiscalMonths = getFiscalMonths()
         const ytdRevenue = financialData.ytdRevenue
         const ytdExpenses = financialData.ytdExpenses
-        const monthlyRevRate = activeFiscalIdx > 0 ? ytdRevenue / activeFiscalIdx : totalBudget / 12
-        const monthlyExpRate = activeFiscalIdx > 0 ? ytdExpenses / activeFiscalIdx : totalBudget / 12
-        const dailyBurn = totalBudget > 0 ? totalBudget / 365 : 1
-        const concern30 = Math.round(dailyBurn * 30)
-        const watch45 = Math.round(dailyBurn * 45)
+        const monthlyRevRate = activeFiscalIdx > 0 ? ytdRevenue / activeFiscalIdx : 0
+        const monthlyExpRate = activeFiscalIdx > 0 ? ytdExpenses / activeFiscalIdx : 0
+        // Threshold lines use the actual monthly burn rate (consistent with days-of-reserves calc)
+        // concern30 = cash needed for 30 days = monthlyExpRate * (30/30) = 1 month of expenses
+        // watch45 = cash needed for 45 days = monthlyExpRate * (45/30) = 1.5 months of expenses
+        const concern30 = Math.round(monthlyExpRate)
+        const watch45 = Math.round(monthlyExpRate * 1.5)
+
+        const canProject = snapshotCount >= 3
 
         // Build month-by-month cash: opening + cumulative revenue - cumulative expenses
-        // For months through active: pro-rate actuals. For future months: project using monthly rates.
+        // For months through active: pro-rate actuals. For future months: project using monthly rates (only with 3+ months).
         const cashData = fiscalMonths.map((fm) => {
           let revenue: number
           let expenses: number
@@ -495,10 +499,12 @@ export default function DashboardPage() {
             // Actual months: pro-rate YTD totals linearly
             revenue = ytdRevenue * (fm.fiscalIndex / activeFiscalIdx)
             expenses = ytdExpenses * (fm.fiscalIndex / activeFiscalIdx)
-          } else {
-            // Projected months: actuals through current + monthly rate for future
+          } else if (canProject) {
+            // Projected months (only with 3+ snapshots): actuals through current + monthly rate for future
             revenue = ytdRevenue + monthlyRevRate * (fm.fiscalIndex - activeFiscalIdx)
             expenses = ytdExpenses + monthlyExpRate * (fm.fiscalIndex - activeFiscalIdx)
+          } else {
+            return { month: fm.shortLabel, fiscalIndex: fm.fiscalIndex, cash: null as number | null, isProjected: true }
           }
           const cash = Math.round(openingCash + revenue - expenses)
           return {
@@ -512,13 +518,13 @@ export default function DashboardPage() {
         // Split into actual vs projected for styling
         const chartData = cashData.map((d) => ({
           month: d.month,
-          actual: d.fiscalIndex <= activeFiscalIdx ? d.cash : null,
-          projected: d.fiscalIndex >= activeFiscalIdx ? d.cash : null,
+          actual: d.fiscalIndex <= activeFiscalIdx && d.cash != null ? d.cash : null,
+          projected: d.fiscalIndex >= activeFiscalIdx && d.cash != null ? d.cash : null,
         }))
 
-        const allCash = cashData.map((d) => d.cash)
-        const minCash = Math.min(...allCash)
-        const maxCash = Math.max(...allCash)
+        const allCash = cashData.map((d) => d.cash).filter((v): v is number => v != null)
+        const minCash = allCash.length > 0 ? Math.min(...allCash) : 0
+        const maxCash = allCash.length > 0 ? Math.max(...allCash) : 0
         const yMin = Math.min(minCash, 0) - 50000
         const yMax = maxCash + 100000
         const goesNegative = minCash < 0
@@ -582,7 +588,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4 mt-2 text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
               <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-100 ring-1 ring-red-200" /> Below 30 days</span>
               <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-yellow-100 ring-1 ring-yellow-200" /> 30-45 days</span>
-              <span className="ml-auto">Based on current revenue &amp; expense run rates</span>
+              <span className="ml-auto">{canProject ? 'Based on current revenue & expense run rates' : 'Projections available after 3 months of data'}</span>
             </div>
             {/* Cash Sentinel findings */}
             {cashFindings.length > 0 && (

@@ -99,20 +99,20 @@ export function cumulativeOspiPct(monthKey: string): number {
 /**
  * Calculate cash position from actual revenue and expense data.
  * cash = openingCash + ytdRevenue - ytdExpenses
+ * daysOfReserves = cashOnHand / monthlyExpenseBurn * 30
  *
- * @param openingCash    Opening cash balance from school profile (September 1 balance)
- * @param ytdRevenue     Sum of YTD actuals for all revenue-type categories
- * @param ytdExpenses    Sum of YTD actuals for all expense-type categories
- * @param annualExpenseBudget  Total annual expense budget (used only for days-of-reserves calc)
+ * @param openingCash          Opening cash balance from school profile (September 1 balance)
+ * @param ytdRevenue           Sum of YTD actuals for all revenue-type categories
+ * @param ytdExpenses          Sum of YTD actuals for all expense-type categories
+ * @param monthlyExpenseBurn   Actual average monthly expense rate (ytdExpenses / months elapsed)
  */
 export function calculateCashPosition(
   openingCash: number,
   ytdRevenue: number,
   ytdExpenses: number,
-  annualExpenseBudget: number,
+  monthlyExpenseBurn: number,
 ): { cashOnHand: number; daysOfReserves: number } {
   const cashOnHand = Math.round(openingCash + ytdRevenue - ytdExpenses)
-  const dailyBurn = annualExpenseBudget > 0 ? annualExpenseBudget / 365 : 1
-  const daysOfReserves = dailyBurn > 0 ? Math.round(cashOnHand / dailyBurn) : 0
+  const daysOfReserves = monthlyExpenseBurn > 0 ? Math.round(cashOnHand / monthlyExpenseBurn * 30) : 0
   return { cashOnHand, daysOfReserves }
 }

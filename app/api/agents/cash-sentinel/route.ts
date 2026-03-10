@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
         return { month: fm.label, pct, isLow: pct <= 5.5 }
       })
 
+    // Monthly burn = total YTD spending / months elapsed (consistent with store calculation)
     const monthlyBurn = currentIdx > 0 ? Math.round(ytdSpending / currentIdx) : 0
 
     const prompt = `Analyze the cash position for a Washington State charter school.

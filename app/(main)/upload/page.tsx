@@ -309,7 +309,12 @@ export default function UploadPage() {
       {
         name: 'Cash Sentinel',
         url: '/api/agents/cash-sentinel',
-        body: { schoolId, activeMonth: month, cashOnHand: fd.cashOnHand, daysOfReserves: fd.daysOfReserves, totalBudget: fd.totalBudget, ytdSpending: fd.ytdSpending },
+        body: {
+          schoolId, activeMonth: month, cashOnHand: fd.cashOnHand, daysOfReserves: fd.daysOfReserves,
+          totalBudget: fd.totalBudget, ytdSpending: fd.ytdSpending,
+          snapshotCount: Object.keys(state.monthlySnapshots).length,
+          categories: fd.categories.map((c) => ({ name: c.name, budget: c.budget, ytdActuals: c.ytdActuals, accountType: c.accountType })),
+        },
       },
       {
         name: 'Grants Officer',

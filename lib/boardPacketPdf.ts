@@ -350,7 +350,7 @@ export async function generateBoardPacketPdf(data: BoardPacketPdfData): Promise<
   const metricsY = coverInfoY + 18
   const colW = boxW / 4
   const metrics = [
-    { label: 'Annual Budget', value: fmtDollar(data.totalBudget) },
+    { label: 'Expense Budget', value: fmtDollar(data.totalBudget) },
     { label: 'YTD Actuals', value: fmtDollar(data.ytdSpending) },
     { label: 'Cash on Hand', value: fmtDollar(data.cashOnHand) },
     { label: 'Days Reserve', value: String(data.daysOfReserves) },

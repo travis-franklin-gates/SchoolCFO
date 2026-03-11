@@ -53,6 +53,7 @@ function buildSystemPrompt(
 
   const fd = financialData as {
     totalBudget: number
+    revenueBudget: number
     ytdSpending: number
     cashOnHand: number
     daysOfReserves: number
@@ -116,8 +117,8 @@ Grades at Full Build-out: ${sp.gradesBuildoutFirst}${sp.gradesBuildoutLast ? '-'
 Current FTES: ${sp.currentFTES}
 
 FINANCIAL SNAPSHOT (${monthsElapsed} of ${totalMonths} months elapsed — ${pacePercent}% through fiscal year):
-- Annual Budget: $${fd.totalBudget.toLocaleString()}
-- YTD Spending: $${fd.ytdSpending.toLocaleString()} (${((fd.ytdSpending / fd.totalBudget) * 100).toFixed(1)}% of budget)
+- Annual Expense Budget: $${fd.totalBudget.toLocaleString()}${fd.revenueBudget > 0 ? `\n- Annual Revenue Budget: $${fd.revenueBudget.toLocaleString()}` : ''}
+- YTD Spending: $${fd.ytdSpending.toLocaleString()} (${fd.totalBudget > 0 ? ((fd.ytdSpending / fd.totalBudget) * 100).toFixed(1) : '0.0'}% of expense budget)
 - Cash on Hand: $${fd.cashOnHand.toLocaleString()} (${fd.daysOfReserves} days of operating reserves)
 - Budget Variance: ${fd.variancePercent}%
 

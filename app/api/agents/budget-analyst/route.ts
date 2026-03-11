@@ -45,8 +45,8 @@ export async function POST(req: NextRequest) {
     const prompt = `Analyze the following budget data for a Washington State charter school. Month: ${activeMonth}, fiscal year pace: ${pacePercent}%.
 
 OVERALL:
-- Annual Budget: $${totalBudget.toLocaleString()}
-- YTD Spending: $${ytdSpending.toLocaleString()} (${((ytdSpending / totalBudget) * 100).toFixed(1)}%)
+- Annual Expense Budget: $${totalBudget.toLocaleString()}
+- YTD Spending: $${ytdSpending.toLocaleString()} (${totalBudget > 0 ? ((ytdSpending / totalBudget) * 100).toFixed(1) : '0.0'}%)
 - Personnel as % of total spending: ${personnelPct}%
 
 CATEGORIES:

@@ -55,7 +55,8 @@ export interface BudgetCategory {
 }
 
 export interface FinancialSnapshot {
-  totalBudget: number
+  totalBudget: number       // expense-only budget total
+  revenueBudget: number     // revenue-only budget total
   ytdSpending: number
   ytdRevenue: number
   ytdExpenses: number
@@ -104,7 +105,8 @@ export interface MonthlySnapshot {
   grants: Grant[]
   alerts: Alert[]
   financialSummary: {
-    totalBudget: number
+    totalBudget: number       // expense-only budget total
+    revenueBudget: number     // revenue-only budget total
     totalActuals: number
     ytdRevenue: number
     ytdExpenses: number
@@ -375,6 +377,7 @@ const SEED_SNAPSHOT: MonthlySnapshot = {
   alerts: SEED_ALERTS,
   financialSummary: {
     totalBudget: 5150000,
+    revenueBudget: 0,
     totalActuals: 3746520,
     ytdRevenue: 0,
     ytdExpenses: 3746520,
@@ -422,6 +425,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
   financialData: {
     totalBudget: 5150000,
+    revenueBudget: 0,
     ytdSpending: 3746520,
     ytdRevenue: 0,
     ytdExpenses: 3746520,
@@ -508,6 +512,7 @@ export const useStore = create<AppState>((set, get) => ({
       for (const row of snapshotRows) {
         const summary = row.financial_summary as {
           totalBudget: number
+          revenueBudget?: number
           totalActuals: number
           ytdRevenue?: number
           ytdExpenses?: number
@@ -522,17 +527,31 @@ export const useStore = create<AppState>((set, get) => ({
         // Fall back to 0 revenue and totalActuals as expenses.
         const ytdRevenue = summary.ytdRevenue ?? 0
         const ytdExpenses = summary.ytdExpenses ?? summary.totalActuals
+        // Backwards compat: older snapshots stored revenue+expense in totalBudget.
+        // If revenueBudget is missing, derive expense-only totalBudget from categories.
+        const cats = (row.budget_categories as BudgetCategory[]) ?? []
+        let totalBudget = summary.totalBudget
+        let revenueBudget = summary.revenueBudget ?? 0
+        if (summary.revenueBudget == null && cats.length > 0) {
+          totalBudget = cats
+            .filter((c) => c.accountType === 'expense')
+            .reduce((s, c) => s + c.budget, 0)
+          revenueBudget = cats
+            .filter((c) => c.accountType === 'revenue')
+            .reduce((s, c) => s + c.budget, 0)
+        }
         monthlySnapshots[row.month_key] = {
           month: row.month_key,
           label: row.label,
           uploadedAt: row.uploaded_at,
           filename: row.filename,
           rowCount: row.row_count,
-          budgetCategories: (row.budget_categories as BudgetCategory[]) ?? [],
+          budgetCategories: cats,
           grants: summary.grants ?? [],
           alerts: summary.alerts ?? [],
           financialSummary: {
-            totalBudget: summary.totalBudget,
+            totalBudget,
+            revenueBudget,
             totalActuals: summary.totalActuals,
             ytdRevenue,
             ytdExpenses,
@@ -566,6 +585,7 @@ export const useStore = create<AppState>((set, get) => ({
         activeMonth: latestKey,
         financialData: {
           totalBudget: latestSnap.financialSummary.totalBudget,
+          revenueBudget: latestSnap.financialSummary.revenueBudget,
           ytdSpending: latestSnap.financialSummary.totalActuals,
           ytdRevenue: latestSnap.financialSummary.ytdRevenue,
           ytdExpenses: latestSnap.financialSummary.ytdExpenses,
@@ -586,6 +606,7 @@ export const useStore = create<AppState>((set, get) => ({
         alerts: [],
         financialData: {
           totalBudget: 0,
+          revenueBudget: 0,
           ytdSpending: 0,
           ytdRevenue: 0,
           ytdExpenses: 0,
@@ -789,6 +810,7 @@ export const useStore = create<AppState>((set, get) => ({
       activeMonth: month,
       financialData: {
         totalBudget: snap.financialSummary.totalBudget,
+        revenueBudget: snap.financialSummary.revenueBudget,
         ytdSpending: snap.financialSummary.totalActuals,
         ytdRevenue: snap.financialSummary.ytdRevenue,
         ytdExpenses: snap.financialSummary.ytdExpenses,
@@ -829,6 +851,7 @@ export const useStore = create<AppState>((set, get) => ({
       )
       newState.financialData = {
         totalBudget: newSnap.financialSummary.totalBudget,
+        revenueBudget: newSnap.financialSummary.revenueBudget,
         ytdSpending: newSnap.financialSummary.totalActuals,
         ytdRevenue: newSnap.financialSummary.ytdRevenue,
         ytdExpenses: newSnap.financialSummary.ytdExpenses,
@@ -1059,7 +1082,6 @@ export const useStore = create<AppState>((set, get) => ({
       }
     })
 
-    const totalBudget = newCategories.reduce((s, c) => s + c.budget, 0)
     const totalActuals = newCategories.reduce((s, c) => s + c.ytdActuals, 0)
     const ytdRevenue = newCategories
       .filter((c) => c.accountType === 'revenue')
@@ -1067,10 +1089,13 @@ export const useStore = create<AppState>((set, get) => ({
     const ytdExpenses = newCategories
       .filter((c) => c.accountType === 'expense')
       .reduce((s, c) => s + c.ytdActuals, 0)
-    const expenseBudget = newCategories
+    const totalBudget = newCategories
       .filter((c) => c.accountType === 'expense')
       .reduce((s, c) => s + c.budget, 0)
-    const expectedSpending = expenseBudget * pace
+    const revenueBudget = newCategories
+      .filter((c) => c.accountType === 'revenue')
+      .reduce((s, c) => s + c.budget, 0)
+    const expectedSpending = totalBudget * pace
     const variancePercent = expectedSpending > 0
       ? parseFloat((((ytdExpenses - expectedSpending) / expectedSpending) * 100).toFixed(1))
       : 0
@@ -1144,6 +1169,7 @@ export const useStore = create<AppState>((set, get) => ({
       alerts: newAlerts,
       financialSummary: {
         totalBudget,
+        revenueBudget,
         totalActuals,
         ytdRevenue,
         ytdExpenses,
@@ -1160,6 +1186,7 @@ export const useStore = create<AppState>((set, get) => ({
       financialData: {
         ...state.financialData,
         totalBudget,
+        revenueBudget,
         ytdSpending: totalActuals,
         ytdRevenue,
         ytdExpenses,
@@ -1474,6 +1501,7 @@ export const useStore = create<AppState>((set, get) => ({
     },
     financialData: {
       totalBudget: 0,
+      revenueBudget: 0,
       ytdSpending: 0,
       ytdRevenue: 0,
       ytdExpenses: 0,

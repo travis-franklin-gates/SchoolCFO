@@ -119,7 +119,7 @@ CURRENT POSITION:
 - Cash on Hand: $${cashOnHand.toLocaleString()}
 - Days of Operating Reserves: ${daysOfReserves}
 ${burnSection}
-- Annual Budget: $${totalBudget.toLocaleString()}
+- Annual Expense Budget: $${totalBudget.toLocaleString()}
 - Months of Expense Data: ${snapshotCount}
 
 UPCOMING OSPI APPORTIONMENT (next 3 months):

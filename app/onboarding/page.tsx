@@ -315,7 +315,7 @@ export default function GuidedOnboardingPage() {
             openingCashBalance: parseFloat(openingCashBalance) || 0,
           },
           financialData: mappedData.length > 0 ? {
-            totalBudget: mappedData.reduce((s, r) => s + r.budget, 0),
+            totalBudget: mappedData.filter((r) => (r.accountType ?? 'expense') === 'expense').reduce((s, r) => s + r.budget, 0),
             ytdSpending: mappedData.reduce((s, r) => s + r.ytdActuals, 0),
             categories: mappedData.map((r) => ({
               name: r.category,

@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 DATA THROUGH: ${monthLabel} — ${pacePercent}% expected budget pace
 
 FINANCIAL POSITION:
-- Annual Budget: $${fdBudget.toLocaleString()}
+- Annual Expense Budget: $${fdBudget.toLocaleString()}
 - YTD Spending: $${fdYtd.toLocaleString()} (${burnPct}% spent vs ${pacePercent}% expected)
 - Cash on Hand: $${fdCash.toLocaleString()} (${fdDays} days of reserves)
 

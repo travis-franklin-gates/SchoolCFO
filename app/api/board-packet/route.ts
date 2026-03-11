@@ -65,8 +65,8 @@ export async function POST(req: NextRequest) {
     const prompt = `You are generating sections of an official board packet for ${schoolName}.
 
 Financial snapshot as of ${monthLabel} (${expectedPct}% through the fiscal year):
-- Annual budget: $${totalBudget.toLocaleString()}
-- YTD actuals: $${totalActuals.toLocaleString()} (${((totalActuals / totalBudget) * 100).toFixed(1)}% of budget, expected ${expectedPct}%)
+- Annual Expense Budget: $${totalBudget.toLocaleString()}
+- YTD Expense Actuals: $${totalActuals.toLocaleString()} (${totalBudget > 0 ? ((totalActuals / totalBudget) * 100).toFixed(1) : '0.0'}% of expense budget, expected ${expectedPct}%)
 - Cash on hand: $${cashOnHand.toLocaleString()} (${daysOfReserves} days of operating reserves)
 - Overall variance vs expected pace: ${variancePercent > 0 ? '+' : ''}${variancePercent}%
 

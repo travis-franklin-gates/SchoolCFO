@@ -859,8 +859,8 @@ export default function UploadPage() {
               </div>
               <div className="text-right">
                 {(() => {
-                  const totalBudget = mappedData.reduce((s, r) => s + r.budget, 0)
-                  const totalYtd = mappedData.reduce((s, r) => s + r.ytdActuals, 0)
+                  const totalBudget = mappedData.filter((r) => (r.accountType ?? 'expense') === 'expense').reduce((s, r) => s + r.budget, 0)
+                  const totalYtd = mappedData.filter((r) => (r.accountType ?? 'expense') === 'expense').reduce((s, r) => s + r.ytdActuals, 0)
                   return totalBudget > 0
                     ? `${((totalYtd / totalBudget) * 100).toFixed(0)}%`
                     : '—'

@@ -182,7 +182,7 @@ export default function BoardPacketPage() {
 
   const pace = paceFromKey(activeMonth)
   const expectedPct = Math.round(pace * 100)
-  const { categories, totalBudget, ytdSpending, cashOnHand, daysOfReserves, variancePercent } =
+  const { categories, totalBudget, revenueBudget, ytdSpending, cashOnHand, daysOfReserves, variancePercent } =
     financialData
 
   // Re-derive alert status from burnRate at render time so stale Supabase values
@@ -203,7 +203,9 @@ export default function BoardPacketPage() {
   const cashFlowRows = getFiscalMonths().map((fm) => {
     const mm = fm.key.split('-')[1]
     const ospiPct = OSPI_PCT[mm] ?? DEFAULT_OSPI_PCT
-    const revenue = Math.round((totalBudget * ospiPct) / 100)
+    // OSPI revenue is based on state aid (revenue budget); fall back to expense budget as proxy
+    const stateAidBasis = revenueBudget > 0 ? revenueBudget : totalBudget
+    const revenue = Math.round((stateAidBasis * ospiPct) / 100)
     const expenses = Math.round(totalBudget / 12)
     const net = revenue - expenses
     const isLow = mm === '11' || mm === '05'
@@ -549,7 +551,7 @@ export default function BoardPacketPage() {
             <h1 className="text-2xl font-bold text-[#1e3a5f]">{schoolProfile.name}</h1>
             <p className="text-base text-gray-600 mt-1">{monthLabel}</p>
             <div className="mt-3 flex justify-center gap-6 text-xs text-gray-500">
-              <span>Annual Budget: <strong className="text-gray-800">{fmt(totalBudget)}</strong></span>
+              <span>Expense Budget: <strong className="text-gray-800">{fmt(totalBudget)}</strong></span>
               <span>YTD Actuals: <strong className="text-gray-800">{fmt(ytdSpending)}</strong></span>
               <span>Cash on Hand: <strong className="text-gray-800">{fmt(cashOnHand)}</strong></span>
               <span>Days of Reserves: <strong className="text-gray-800">{daysOfReserves}</strong></span>

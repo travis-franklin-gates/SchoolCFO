@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const prompt = `Analyze federal programs compliance for a WA charter school operating as an LEA.
 
 SCHOOL FINANCIALS:
-- Annual Budget: $${totalBudget.toLocaleString()}
+- Annual Expense Budget: $${totalBudget.toLocaleString()}
 - YTD Spending: $${ytdSpending.toLocaleString()}
 - Fiscal Year Pace: ${pacePercent}% through
 

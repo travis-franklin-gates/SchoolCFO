@@ -68,8 +68,8 @@ export async function POST(req: NextRequest) {
 The SAO conducts accountability audits of charter schools focusing on: staff certification compliance, enrollment reporting accuracy, accounts payable controls, warrant approval compliance, categorical fund compliance, Open Public Meetings Act & board governance, separation of public and private activities, and theft-sensitive asset tracking. Reference specific RCWs and WACs where relevant (RCW 42.24.080/090 for warrants, RCW 42.30 for OPMA, RCW 28A.710 for charter schools, WAC 392-121 for enrollment).
 
 Financial snapshot as of ${monthLabel}:
-- Annual budget: $${totalBudget.toLocaleString()}
-- YTD actuals: $${totalActuals.toLocaleString()} (${((totalActuals / totalBudget) * 100).toFixed(1)}% of budget)
+- Annual Expense Budget: $${totalBudget.toLocaleString()}
+- YTD Expense Actuals: $${totalActuals.toLocaleString()} (${totalBudget > 0 ? ((totalActuals / totalBudget) * 100).toFixed(1) : '0.0'}% of expense budget)
 - Cash on hand: $${cashOnHand.toLocaleString()} (${daysOfReserves} days of operating reserves)
 - Overall variance: ${variancePercent > 0 ? '+' : ''}${variancePercent}%
 

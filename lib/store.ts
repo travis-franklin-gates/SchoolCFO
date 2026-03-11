@@ -663,7 +663,13 @@ export const useStore = create<AppState>((set, get) => ({
         notes: g.notes ?? '',
       }))
 
-    set({ grants: categoricalGrants, otherGrants: otherGrantList })
+    // Only overwrite grants from the DB table if it returned categorical rows.
+    // Otherwise, keep the snapshot-sourced grants (set earlier from financial_summary JSONB).
+    const grantUpdate: Partial<AppState> = { otherGrants: otherGrantList }
+    if (categoricalGrants.length > 0) {
+      grantUpdate.grants = categoricalGrants
+    }
+    set(grantUpdate)
 
     // 4. Load board packets
     const { data: packetRows } = await supabase

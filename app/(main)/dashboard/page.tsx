@@ -82,6 +82,7 @@ export default function DashboardPage() {
   const [briefing, setBriefing] = useState('')
   const [briefingLoading, setBriefingLoading] = useState(false)
   const [briefingError, setBriefingError] = useState(false)
+  const [briefingExpanded, setBriefingExpanded] = useState(false)
   const fetchedForRef = useRef<string | null>(null)
 
   const activeSnap = monthlySnapshots[activeMonth]
@@ -340,12 +341,23 @@ export default function DashboardPage() {
             AI briefing unavailable — check that your ANTHROPIC_API_KEY is configured. Budget analysis and alerts below reflect the current financial position.
           </p>
         ) : briefing ? (
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            {briefingMain}
-            {briefingAction && (
-              <span className="font-semibold" style={{ color: 'var(--text-primary)' }}> → {briefingAction}</span>
+          <div>
+            <div className={`text-sm leading-relaxed ${!briefingExpanded ? 'line-clamp-4' : ''}`} style={{ color: 'var(--text-secondary)' }}>
+              {briefingMain}
+              {briefingAction && (
+                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}> → {briefingAction}</span>
+              )}
+            </div>
+            {briefing.length > 280 && (
+              <button
+                onClick={() => setBriefingExpanded(!briefingExpanded)}
+                className="text-xs font-medium mt-2 hover:underline"
+                style={{ color: 'var(--brand-500)' }}
+              >
+                {briefingExpanded ? 'Show less' : 'Read more'}
+              </button>
             )}
-          </p>
+          </div>
         ) : (
           <div className="space-y-2.5">
             <div className="skeleton h-4 w-full" />

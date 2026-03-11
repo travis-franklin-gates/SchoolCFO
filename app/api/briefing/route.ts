@@ -79,7 +79,7 @@ ${alertList.map((a) => `- [${String(a.severity ?? 'info').toUpperCase()}] ${Stri
 
     const response = await client.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 220,
+      max_tokens: 400,
       system: `You are a virtual CFO delivering a morning briefing to a charter school CEO. Write exactly 3-4 sentences in plain English. No headers, no bullet points, no jargon.
 
 Structure:
@@ -87,6 +87,8 @@ Structure:
 2. The most important concern: a specific category, dollar amount, and why it matters.
 3. One additional notable item if relevant (optional — skip if nothing else worth flagging).
 4. End with exactly this format: "→ [One specific action they should take today, written as a direct command, time-specific if relevant.]"
+
+IMPORTANT: Use the exact "days of reserves" figure provided in the data. Do not recalculate it — the figure already accounts for the school's actual monthly expense burn rate.
 
 Be direct and concrete. Use real numbers. Write like a trusted advisor giving a quick briefing before a meeting.`,
       messages: [{ role: 'user', content: context }],

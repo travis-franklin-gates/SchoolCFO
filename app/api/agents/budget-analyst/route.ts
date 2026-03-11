@@ -63,6 +63,10 @@ Only include categories where burn rate exceeds pace by >5pp (watch), >10pp (con
 
 Also flag if personnel % is above 85% of total spending (concern) or above 90% (action).
 
+IMPORTANT CAVEATS for any staffing or FTE-related recommendations:
+- If suggesting a 0.49 FTE strategy to avoid SEBB benefits eligibility, always include a caveat that this approach should be reviewed with HR or legal counsel before implementing, as rules and thresholds may change.
+- Any salary estimates should note they must be verified against current LEAP salary schedules published by OSPI.
+
 Return ONLY the JSON array, no markdown fences.`
 
     const response = await client.messages.create({

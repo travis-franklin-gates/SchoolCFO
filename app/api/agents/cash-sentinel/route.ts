@@ -94,6 +94,19 @@ export async function POST(req: NextRequest) {
 
     const hasEnoughData = snapshotCount >= 3
 
+    // ── Derive low-payment and peak months from OSPI_PCT ─────────────────────
+    const calMonthNames: Record<string, string> = {
+      '01': 'January', '02': 'February', '03': 'March', '04': 'April',
+      '05': 'May', '06': 'June', '07': 'July', '08': 'August',
+      '09': 'September', '10': 'October', '11': 'November', '12': 'December',
+    }
+    const lowMonths = Object.entries(OSPI_PCT)
+      .filter(([, pct]) => pct <= 6)
+      .map(([mm, pct]) => `${calMonthNames[mm]}=${pct}%`)
+      .join(', ')
+    const peakEntry = Object.entries(OSPI_PCT).reduce((a, b) => (b[1] > a[1] ? b : a))
+    const peakMonth = `${calMonthNames[peakEntry[0]]}=${peakEntry[1]}%`
+
     // ── Build prompt sections ────────────────────────────────────────────────
     let burnSection = `- Monthly Burn Rate (average): $${monthlyBurn.toLocaleString()}`
     if (adjustedNames.length > 0 && normalizedBurn !== monthlyBurn) {
@@ -139,7 +152,7 @@ Return a JSON array of findings. Each finding must have:
 
 Flag:
 1. Current reserves threshold breach (if applicable)
-2. Upcoming low payment months that could stress cash (November=5%, May=5%)
+2. Upcoming low payment months that could stress cash (${lowMonths}; highest inflow: ${peakMonth})
 ${projectionInstructions}
 
 Only include findings at watch/concern/action level. Return ONLY the JSON array, no markdown fences.`

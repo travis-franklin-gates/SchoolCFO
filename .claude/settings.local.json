@@ -15,7 +15,8 @@
       "Bash(wait:*)",
       "Bash(mv:*)",
       "Bash(npx supabase:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git add:*)"
     ]
   }
 }

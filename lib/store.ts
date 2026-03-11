@@ -820,7 +820,8 @@ export const useStore = create<AppState>((set, get) => ({
         categories: snap.budgetCategories,
         monthlySpend: snap.monthlySpend,
       },
-      grants: snap.grants,
+      // grants are NOT reset here — they come from the grants DB table
+      // (loaded once in loadFromSupabase step 3) and are month-independent.
       alerts: snap.alerts,
     })
   },
@@ -861,7 +862,8 @@ export const useStore = create<AppState>((set, get) => ({
         categories: newSnap.budgetCategories,
         monthlySpend: newSnap.monthlySpend,
       }
-      newState.grants = newSnap.grants
+      // grants are NOT reset here — they come from the grants DB table
+      // (loaded once in loadFromSupabase step 3) and are month-independent.
       newState.alerts = newSnap.alerts
     }
 

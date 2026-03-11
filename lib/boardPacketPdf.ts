@@ -34,7 +34,9 @@ export interface BoardPacketPdfData {
   nextBoardMeeting: string | null
   generatedDate: string
   totalBudget: number
+  revenueBudget: number
   ytdSpending: number
+  ytdRevenue: number
   cashOnHand: number
   daysOfReserves: number
   variancePercent: number
@@ -400,7 +402,7 @@ export async function generateBoardPacketPdf(data: BoardPacketPdfData): Promise<
     bold: true,
   }))
 
-  const budgetRows: CellData[][] = data.categories.map((cat) => {
+  const makeBudgetRow = (cat: BudgetCategory): CellData[] => {
     const ytdBudget = Math.round(cat.budget * data.pace)
     const varDollar = cat.ytdActuals - ytdBudget
     const varPct = ytdBudget > 0 ? ((cat.ytdActuals - ytdBudget) / ytdBudget) * 100 : 0
@@ -416,27 +418,76 @@ export async function generateBoardPacketPdf(data: BoardPacketPdfData): Promise<
       { text: fmtPct(varPct), color: varPctColor, bold: true },
       { text: statusLabel(status), color: status === 'action' ? RED : status === 'concern' ? AMBER : status === 'watch' ? AMBER : GREEN },
     ]
-  })
+  }
 
-  const totalYtdBudget = Math.round(data.totalBudget * data.pace)
-  const totalVar = data.ytdSpending - totalYtdBudget
-  const totalVarColor = totalVar > 0 ? RED : GREEN
+  // ── Expenses table ──
+  const expenseCats = data.categories.filter((c) => c.accountType === 'expense')
 
-  const budgetFooter: CellData[] = [
-    { text: 'Total', bold: true },
+  writeWrapped('Expenses', MARGIN, CONTENT_W, 11, 'bold', BRAND)
+  curY += 4
+
+  const expenseRows: CellData[][] = expenseCats.map(makeBudgetRow)
+
+  const expTotalYtdBudget = Math.round(data.totalBudget * data.pace)
+  const expTotalVar = data.ytdSpending - expTotalYtdBudget
+  const expTotalVarColor = expTotalVar > 0 ? RED : GREEN
+  const expTotalVarPct = expTotalYtdBudget > 0 ? ((data.ytdSpending - expTotalYtdBudget) / expTotalYtdBudget) * 100 : 0
+
+  const expenseFooter: CellData[] = [
+    { text: 'Total Expenses', bold: true },
     { text: fmtDollar(data.totalBudget), bold: true },
     { text: fmtDollar(data.ytdSpending), bold: true },
-    { text: fmtDollar(totalYtdBudget), color: TEXT_MED },
-    { text: (totalVar >= 0 ? '+' : '') + fmtDollar(totalVar), color: totalVarColor, bold: true },
-    { text: fmtPct(data.variancePercent), color: TEXT_MED },
+    { text: fmtDollar(expTotalYtdBudget), color: TEXT_MED },
+    { text: (expTotalVar >= 0 ? '+' : '') + fmtDollar(expTotalVar), color: expTotalVarColor, bold: true },
+    { text: fmtPct(expTotalVarPct), color: TEXT_MED },
     { text: '' },
   ]
 
-  drawTable(budgetCols, budgetHeaderCells, budgetRows, budgetFooter)
+  drawTable(budgetCols, budgetHeaderCells, expenseRows, expenseFooter)
+
+  // ── Revenue table ──
+  const revenueCats = data.categories.filter((c) => c.accountType === 'revenue')
+
+  if (revenueCats.length > 0) {
+    curY += 14
+
+    writeWrapped('Revenue', MARGIN, CONTENT_W, 11, 'bold', BRAND)
+    curY += 4
+
+    const revenueRows: CellData[][] = revenueCats.map(makeBudgetRow)
+
+    const revTotalYtdBudget = Math.round(data.revenueBudget * data.pace)
+    const revTotalVar = data.ytdRevenue - revTotalYtdBudget
+    const revTotalVarColor = revTotalVar > 0 ? GREEN : revTotalVar < 0 ? RED : TEXT_DARK
+    const revTotalVarPct = revTotalYtdBudget > 0 ? ((data.ytdRevenue - revTotalYtdBudget) / revTotalYtdBudget) * 100 : 0
+
+    const revenueFooter: CellData[] = [
+      { text: 'Total Revenue', bold: true },
+      { text: fmtDollar(data.revenueBudget), bold: true },
+      { text: fmtDollar(data.ytdRevenue), bold: true },
+      { text: fmtDollar(revTotalYtdBudget), color: TEXT_MED },
+      { text: (revTotalVar >= 0 ? '+' : '') + fmtDollar(revTotalVar), color: revTotalVarColor, bold: true },
+      { text: fmtPct(revTotalVarPct), color: TEXT_MED },
+      { text: '' },
+    ]
+
+    drawTable(budgetCols, budgetHeaderCells, revenueRows, revenueFooter)
+
+    // ── Net summary ──
+    curY += 10
+    ensureSpace(24)
+    const netAmount = data.ytdRevenue - data.ytdSpending
+    const netColor = netAmount >= 0 ? GREEN : RED
+    const netLabel = netAmount >= 0 ? 'Net Surplus' : 'Net Deficit'
+    writeWrapped(
+      `${netLabel}: ${fmtDollar(netAmount)}  (YTD Revenue ${fmtDollar(data.ytdRevenue)} \u2013 YTD Expenses ${fmtDollar(data.ytdSpending)})`,
+      MARGIN, CONTENT_W, 10, 'bold', netColor
+    )
+  }
 
   curY += 8
   writeWrapped(
-    `YTD Budget reflects expected spending at ${data.expectedPct}% through the fiscal year (${data.monthLabel}).`,
+    `YTD Budget reflects expected pace at ${data.expectedPct}% through the fiscal year (${data.monthLabel}).`,
     MARGIN, CONTENT_W, 8, 'italic', TEXT_MED
   )
 

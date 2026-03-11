@@ -182,7 +182,7 @@ export default function BoardPacketPage() {
 
   const pace = paceFromKey(activeMonth)
   const expectedPct = Math.round(pace * 100)
-  const { categories, totalBudget, revenueBudget, ytdSpending, cashOnHand, daysOfReserves, variancePercent } =
+  const { categories, totalBudget, revenueBudget, ytdSpending, ytdExpenses, ytdRevenue, cashOnHand, daysOfReserves, variancePercent } =
     financialData
 
   // Re-derive alert status from burnRate at render time so stale Supabase values
@@ -285,7 +285,9 @@ export default function BoardPacketPage() {
         nextBoardMeeting: schoolProfile.nextBoardMeeting || null,
         generatedDate: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         totalBudget,
-        ytdSpending,
+        revenueBudget,
+        ytdSpending: ytdExpenses,
+        ytdRevenue,
         cashOnHand,
         daysOfReserves,
         variancePercent,
@@ -309,7 +311,7 @@ export default function BoardPacketPage() {
         flaggedCategories,
         apWarrants: AP_WARRANTS,
         payrollWarrants: PAYROLL_WARRANTS,
-        hasRealWarrants: false, // placeholder data — will be true when real warrant data exists
+        hasRealWarrants: AP_WARRANTS.length > 0 || PAYROLL_WARRANTS.length > 0,
       }
 
       await generateBoardPacketPdf(pdfData)
@@ -552,7 +554,7 @@ export default function BoardPacketPage() {
             <p className="text-base text-gray-600 mt-1">{monthLabel}</p>
             <div className="mt-3 flex justify-center gap-6 text-xs text-gray-500">
               <span>Expense Budget: <strong className="text-gray-800">{fmt(totalBudget)}</strong></span>
-              <span>YTD Actuals: <strong className="text-gray-800">{fmt(ytdSpending)}</strong></span>
+              <span>YTD Actuals: <strong className="text-gray-800">{fmt(ytdExpenses)}</strong></span>
               <span>Cash on Hand: <strong className="text-gray-800">{fmt(cashOnHand)}</strong></span>
               <span>Days of Reserves: <strong className="text-gray-800">{daysOfReserves}</strong></span>
             </div>
@@ -560,6 +562,8 @@ export default function BoardPacketPage() {
 
           {/* ── Section 1: Budget vs. Actuals ── */}
           <Section number={1} title="Budget vs. Actuals Summary">
+            {/* ── Expenses ── */}
+            <p className="text-sm font-bold text-[#1e3a5f] mb-1">Expenses</p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -574,7 +578,7 @@ export default function BoardPacketPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {categories.map((cat, i) => {
+                  {categories.filter((c) => c.accountType === 'expense').map((cat, i) => {
                     const ytdBudget = Math.round(cat.budget * pace)
                     const varDollar = cat.ytdActuals - ytdBudget
                     const varPct = ytdBudget > 0 ? ((cat.ytdActuals - ytdBudget) / ytdBudget) * 100 : 0
@@ -604,10 +608,10 @@ export default function BoardPacketPage() {
                   <tr className="border-t-2 border-[#1e3a5f] bg-[#f0f4f8] font-semibold">
                     <td className="px-3 py-2 text-gray-800">Total Expenses</td>
                     <td className="px-3 py-2 text-right text-gray-800">{fmtFull(totalBudget)}</td>
-                    <td className="px-3 py-2 text-right text-gray-800">{fmtFull(financialData.ytdExpenses)}</td>
+                    <td className="px-3 py-2 text-right text-gray-800">{fmtFull(ytdExpenses)}</td>
                     <td className="px-3 py-2 text-right text-gray-600">{fmtFull(Math.round(totalBudget * pace))}</td>
-                    <td className={`px-3 py-2 text-right ${financialData.ytdExpenses - Math.round(totalBudget * pace) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {financialData.ytdExpenses - Math.round(totalBudget * pace) >= 0 ? '+' : ''}{fmtFull(financialData.ytdExpenses - Math.round(totalBudget * pace))}
+                    <td className={`px-3 py-2 text-right ${ytdExpenses - Math.round(totalBudget * pace) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {ytdExpenses - Math.round(totalBudget * pace) >= 0 ? '+' : ''}{fmtFull(ytdExpenses - Math.round(totalBudget * pace))}
                     </td>
                     <td className="px-3 py-2 text-right text-gray-600">
                       {fmtPct(variancePercent)}
@@ -617,8 +621,96 @@ export default function BoardPacketPage() {
                 </tfoot>
               </table>
             </div>
+
+            {/* ── Revenue ── */}
+            {categories.some((c) => c.accountType === 'revenue') && (
+              <>
+                <p className="text-sm font-bold text-[#1e3a5f] mt-4 mb-1">Revenue</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-[#1e3a5f] text-white">
+                        <th className="text-left px-3 py-2 font-semibold">Category</th>
+                        <th className="text-right px-3 py-2 font-semibold">Annual Budget</th>
+                        <th className="text-right px-3 py-2 font-semibold">YTD Actual</th>
+                        <th className="text-right px-3 py-2 font-semibold">YTD Budget</th>
+                        <th className="text-right px-3 py-2 font-semibold">Variance $</th>
+                        <th className="text-right px-3 py-2 font-semibold">Variance %</th>
+                        <th className="text-center px-3 py-2 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {categories.filter((c) => c.accountType === 'revenue').map((cat, i) => {
+                        const ytdBudget = Math.round(cat.budget * pace)
+                        const varDollar = cat.ytdActuals - ytdBudget
+                        const varPct = ytdBudget > 0 ? ((cat.ytdActuals - ytdBudget) / ytdBudget) * 100 : 0
+                        const cfg = STATUS_CFG[deriveAlertStatus(cat.burnRate)] ?? STATUS_CFG.ok
+                        return (
+                          <tr key={cat.name} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-3 py-2 font-medium text-gray-800">{cat.name}</td>
+                            <td className="px-3 py-2 text-right text-gray-600">{fmtFull(cat.budget)}</td>
+                            <td className="px-3 py-2 text-right text-gray-800 font-medium">{fmtFull(cat.ytdActuals)}</td>
+                            <td className="px-3 py-2 text-right text-gray-500">{fmtFull(ytdBudget)}</td>
+                            <td className={`px-3 py-2 text-right font-medium ${varDollar > 0 ? 'text-green-600' : varDollar < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                              {varDollar >= 0 ? '+' : ''}{fmtFull(varDollar)}
+                            </td>
+                            <td className={`px-3 py-2 text-right font-medium ${varPct > 5 ? 'text-green-600' : varPct < -20 ? 'text-amber-600' : 'text-gray-600'}`}>
+                              {fmtPct(varPct)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cfg.cls}`}>
+                                {cfg.label}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-[#1e3a5f] bg-[#f0f4f8] font-semibold">
+                        <td className="px-3 py-2 text-gray-800">Total Revenue</td>
+                        <td className="px-3 py-2 text-right text-gray-800">{fmtFull(revenueBudget)}</td>
+                        <td className="px-3 py-2 text-right text-gray-800">{fmtFull(ytdRevenue)}</td>
+                        <td className="px-3 py-2 text-right text-gray-600">{fmtFull(Math.round(revenueBudget * pace))}</td>
+                        {(() => {
+                          const revExpBudget = Math.round(revenueBudget * pace)
+                          const revVar = ytdRevenue - revExpBudget
+                          const revVarPct = revExpBudget > 0 ? ((ytdRevenue - revExpBudget) / revExpBudget) * 100 : 0
+                          return (
+                            <>
+                              <td className={`px-3 py-2 text-right ${revVar >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {revVar >= 0 ? '+' : ''}{fmtFull(revVar)}
+                              </td>
+                              <td className="px-3 py-2 text-right text-gray-600">
+                                {fmtPct(revVarPct)}
+                              </td>
+                            </>
+                          )
+                        })()}
+                        <td />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* ── Net Summary ── */}
+                {(() => {
+                  const netAmount = ytdRevenue - ytdExpenses
+                  const netLabel = netAmount >= 0 ? 'Net Surplus' : 'Net Deficit'
+                  return (
+                    <p className={`mt-3 text-sm font-bold ${netAmount >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {netLabel}: {fmtFull(netAmount)}{' '}
+                      <span className="font-normal text-gray-500">
+                        (YTD Revenue {fmtFull(ytdRevenue)} – YTD Expenses {fmtFull(ytdExpenses)})
+                      </span>
+                    </p>
+                  )
+                })()}
+              </>
+            )}
+
             <p className="text-xs text-gray-400 mt-2">
-              YTD Budget reflects expected spending at {expectedPct}% through the fiscal year ({monthLabel}).
+              YTD Budget reflects expected pace at {expectedPct}% through the fiscal year ({monthLabel}).
             </p>
           </Section>
 
@@ -827,13 +919,14 @@ export default function BoardPacketPage() {
 
           {/* ── Section 6: Warrant Approval ── */}
           <Section number={6} title={`Warrant Approval — ${monthLabel}`}>
-            <div className="flex items-start gap-2.5 bg-amber-50 border-2 border-amber-400 rounded-lg px-4 py-3 mb-4 text-sm text-amber-900">
-              <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-600" />
-              <span>
-                <strong>Placeholder Data —</strong> These warrant numbers and amounts are for demonstration only.
-                Replace with your actual AP and payroll warrant register before presenting to the board.
-              </span>
-            </div>
+            {AP_WARRANTS.length === 0 && PAYROLL_WARRANTS.length === 0 && (
+              <div className="flex items-start gap-2.5 bg-amber-50 border-2 border-amber-400 rounded-lg px-4 py-3 mb-4 text-sm text-amber-900">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-600" />
+                <span>
+                  Warrant data not yet entered — add via Settings before presenting to board.
+                </span>
+              </div>
+            )}
             <p className="text-xs text-gray-500 mb-4">
               Board approval required per <strong>RCW 42.24.080</strong>. The following warrants are presented for board ratification.
             </p>

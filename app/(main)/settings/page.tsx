@@ -664,8 +664,11 @@ export default function SettingsPage() {
                 <div className="flex items-center py-3 gap-3">
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-800">{grant.name}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      ${grant.awardAmount.toLocaleString()} award
+                    {grant.description && (
+                      <p className="text-xs text-gray-400 mt-0.5">{grant.description}</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                      {grant.awardAmount > 0 ? `$${grant.awardAmount.toLocaleString()} award` : '$0 — enter your allocation'}
                     </p>
                   </div>
                   <button

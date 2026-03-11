@@ -74,8 +74,10 @@ export default function GrantTrackerPage() {
 
   const pacePct = Math.round(paceFromKey(activeMonth) * 100)
 
-  const total = grants.reduce((s, g) => s + g.awardAmount, 0)
-  const totalSpent = grants.reduce((s, g) => s + g.spent, 0)
+  const configuredGrants = grants.filter((g) => g.awardAmount > 0)
+  const unconfiguredCount = grants.length - configuredGrants.length
+  const total = configuredGrants.reduce((s, g) => s + g.awardAmount, 0)
+  const totalSpent = configuredGrants.reduce((s, g) => s + g.spent, 0)
 
   const otherTotal = otherGrants.reduce((s, g) => s + g.awardAmount, 0)
   const otherTotalSpent = otherGrants.reduce((s, g) => s + g.spentToDate, 0)
@@ -116,16 +118,25 @@ export default function GrantTrackerPage() {
               </p>
             </div>
           </div>
-          <p className="text-xs text-gray-400">Expected pace: {pacePct}%</p>
+          <div className="text-right">
+            <p className="text-xs text-gray-400">Expected pace: {pacePct}%</p>
+            {unconfiguredCount > 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                {unconfiguredCount} grant{unconfiguredCount > 1 ? 's' : ''} need award amounts —{' '}
+                <a href="/settings" className="underline">Settings</a>
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Grant cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {grants.map((grant) => {
             const cfg = statusConfig[grant.status]
-            const spentPct = (grant.spent / grant.awardAmount) * 100
+            const spentPct = grant.awardAmount > 0 ? (grant.spent / grant.awardAmount) * 100 : 0
             const remaining = grant.awardAmount - grant.spent
             const paceGap = spentPct - pacePct
+            const needsConfig = grant.awardAmount === 0
 
             return (
               <div
@@ -134,7 +145,7 @@ export default function GrantTrackerPage() {
                   grant.status === 'underspend-risk' ? 'border-orange-200' : ''
                 }`}
               >
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start justify-between mb-1">
                   <h3 className="font-semibold text-gray-800 text-sm leading-snug pr-2">
                     {grant.name}
                   </h3>
@@ -144,50 +155,72 @@ export default function GrantTrackerPage() {
                     {cfg.label}
                   </span>
                 </div>
+                {grant.description && (
+                  <p className="text-xs text-gray-400 mb-3">{grant.description}</p>
+                )}
+                {!grant.description && <div className="mb-3" />}
 
-                <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-                  <div>
-                    <p className="text-xs text-gray-400">Award</p>
-                    <p className="text-sm font-bold text-gray-800 mt-0.5">
-                      ${grant.awardAmount.toLocaleString()}
+                {needsConfig ? (
+                  <div className="bg-gray-50 rounded-lg px-4 py-3 text-center">
+                    <p className="text-sm text-gray-500">
+                      Award amount not set.{' '}
+                      <a href="/settings" className="text-[#1e3a5f] font-medium underline">
+                        Enter your allocation in Settings
+                      </a>
                     </p>
+                    {grant.spent > 0 && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        ${grant.spent.toLocaleString()} spent to date
+                      </p>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Spent</p>
-                    <p className="text-sm font-bold text-gray-800 mt-0.5">
-                      ${grant.spent.toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Remaining</p>
-                    <p className="text-sm font-bold text-gray-800 mt-0.5">
-                      ${remaining.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+                      <div>
+                        <p className="text-xs text-gray-400">Award</p>
+                        <p className="text-sm font-bold text-gray-800 mt-0.5">
+                          ${grant.awardAmount.toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Spent</p>
+                        <p className="text-sm font-bold text-gray-800 mt-0.5">
+                          ${grant.spent.toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Remaining</p>
+                        <p className="text-sm font-bold text-gray-800 mt-0.5">
+                          ${remaining.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
 
-                <div>
-                  <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-                    <span>Spend rate</span>
-                    <span className="font-medium text-gray-700">{spentPct.toFixed(0)}%</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2 relative">
-                    <div
-                      className="absolute top-0 h-2.5 w-0.5 bg-gray-400 rounded"
-                      style={{ left: `${pacePct}%` }}
-                      title={`Expected: ${pacePct}%`}
-                    />
-                    <div
-                      className={`h-2.5 rounded-full transition-all ${cfg.bar}`}
-                      style={{ width: `${Math.min(spentPct, 100)}%` }}
-                    />
-                  </div>
-                  {grant.status === 'underspend-risk' && (
-                    <p className="text-xs text-orange-700 mt-2">
-                      {Math.abs(paceGap).toFixed(0)}% below expected pace — verify allowable expenses
-                    </p>
-                  )}
-                </div>
+                    <div>
+                      <div className="flex justify-between text-xs text-gray-400 mb-1.5">
+                        <span>Spend rate</span>
+                        <span className="font-medium text-gray-700">{spentPct.toFixed(0)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2 relative">
+                        <div
+                          className="absolute top-0 h-2.5 w-0.5 bg-gray-400 rounded"
+                          style={{ left: `${pacePct}%` }}
+                          title={`Expected: ${pacePct}%`}
+                        />
+                        <div
+                          className={`h-2.5 rounded-full transition-all ${cfg.bar}`}
+                          style={{ width: `${Math.min(spentPct, 100)}%` }}
+                        />
+                      </div>
+                      {grant.status === 'underspend-risk' && (
+                        <p className="text-xs text-orange-700 mt-2">
+                          {Math.abs(paceGap).toFixed(0)}% below expected pace — verify allowable expenses
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             )
           })}

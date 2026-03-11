@@ -70,10 +70,24 @@ export interface FinancialSnapshot {
 export interface Grant {
   id: string
   name: string
+  description?: string
   awardAmount: number
   spent: number
   status: GrantStatus
 }
+
+/** Standard WA categorical grants seeded for every new school. */
+export const WA_DEFAULT_GRANTS: { name: string; description: string }[] = [
+  { name: 'Title I Part A', description: 'Federal funding for schools with high percentages of low-income students' },
+  { name: 'Title II Part A', description: 'Teacher and principal training and recruitment' },
+  { name: 'Title IV Part A', description: 'Student support and academic enrichment' },
+  { name: 'IDEA (Special Education)', description: 'Federal funding for students with disabilities' },
+  { name: 'LAP (Learning Assistance)', description: 'State supplemental instruction for underperforming students' },
+  { name: 'TBIP (Transitional Bilingual)', description: 'State funding for English learner programs' },
+  { name: 'HiCap (Highly Capable)', description: 'State funding for gifted and talented programs' },
+  { name: 'MSOC (Materials, Supplies & Operating Costs)', description: 'State per-pupil allocation for materials and supplies' },
+  { name: 'Lunch Program / Food Service', description: 'Federal National School Lunch Program reimbursement' },
+]
 
 export type OtherGrantRestrictions = 'unrestricted' | 'restricted' | 'multi-year'
 
@@ -180,7 +194,8 @@ interface AppState {
   // ── Data ──
   schoolProfile: SchoolProfile
   financialData: FinancialSnapshot
-  grants: Grant[]
+  grantAwards: Grant[]         // master list from grants DB table (Settings); award amounts are source of truth
+  grants: Grant[]              // merged view: award from grantAwards + spent from active snapshot
   otherGrants: OtherGrant[]
   alerts: Alert[]
   monthlySnapshots: Record<string, MonthlySnapshot>
@@ -206,6 +221,7 @@ interface AppState {
   addGrant: (grant: Grant) => void
   updateGrant: (id: string, updates: Pick<Grant, 'name' | 'awardAmount'>) => void
   removeGrant: (id: string) => void
+  seedDefaultGrants: () => void
   addOtherGrant: (grant: OtherGrant) => void
   removeOtherGrant: (id: string) => void
   updateOtherGrant: (id: string, updates: Partial<OtherGrant>) => void
@@ -401,6 +417,29 @@ function writeThrough(fn: (supabase: import('@supabase/supabase-js').SupabaseCli
   })
 }
 
+/**
+ * Merge grant award data (from Settings / DB table) with spent data from a snapshot.
+ * Awards are the source of truth for which grants to show and their amounts;
+ * spent comes from the active month's financial_summary.grants JSONB.
+ */
+function mergeGrantsWithSnapshot(awards: Grant[], snapshotGrants: Grant[]): Grant[] {
+  // Build lookup: lowercase name → spent, and id → spent
+  const spentByName = new Map<string, number>()
+  const spentById = new Map<string, number>()
+  const statusByName = new Map<string, GrantStatus>()
+  for (const sg of snapshotGrants) {
+    spentByName.set(sg.name.toLowerCase(), sg.spent)
+    spentById.set(sg.id, sg.spent)
+    statusByName.set(sg.name.toLowerCase(), sg.status)
+  }
+
+  return awards.map((award) => {
+    const spent = spentById.get(award.id) ?? spentByName.get(award.name.toLowerCase()) ?? 0
+    const status = statusByName.get(award.name.toLowerCase()) ?? award.status
+    return { ...award, spent, status }
+  })
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 export const useStore = create<AppState>((set, get) => ({
@@ -435,6 +474,7 @@ export const useStore = create<AppState>((set, get) => ({
     categories: SEED_CATEGORIES,
     monthlySpend: SEED_MONTHLY_SPEND,
   },
+  grantAwards: SEED_GRANTS,
   grants: SEED_GRANTS,
   otherGrants: [],
   alerts: SEED_ALERTS,
@@ -504,9 +544,6 @@ export const useStore = create<AppState>((set, get) => ({
       .eq('school_id', schoolId)
       .order('month_key', { ascending: true })
 
-    // Track snapshot grant spent values so step 3 can fall back to them when DB has 0.
-    let snapshotGrantSpent = new Map<string, number>()
-
     if (snapshotRows && snapshotRows.length > 0) {
       const monthlySnapshots: Record<string, MonthlySnapshot> = {}
       for (const row of snapshotRows) {
@@ -566,10 +603,6 @@ export const useStore = create<AppState>((set, get) => ({
       const latestKey = snapshotRows[snapshotRows.length - 1].month_key
       const latestSnap = monthlySnapshots[latestKey]
       const existingFinancial = get().financialData
-      // Build spent fallback map so step 3 can restore non-zero spent values clobbered in the DB.
-      snapshotGrantSpent = new Map(
-        latestSnap.grants.map((g) => [g.name.toLowerCase(), g.spent])
-      )
       // Calculate cash position: opening + ytdRevenue - ytdExpenses
       const openingCash = get().schoolProfile.openingCashBalance
       const latestFiscalIdx = fiscalIndexFromKey(latestKey)
@@ -602,6 +635,7 @@ export const useStore = create<AppState>((set, get) => ({
       // No data yet — clear seed
       set({
         monthlySnapshots: {},
+        grantAwards: [],
         grants: [],
         alerts: [],
         financialData: {
@@ -628,19 +662,20 @@ export const useStore = create<AppState>((set, get) => ({
 
     // Deduplicate categorical grants by name — keep the one with the highest award amount.
     // Duplicates arise when a grant is added manually in Settings and also imported from a file.
+    // Build description lookup from WA defaults (DB doesn't store descriptions)
+    const defaultDescByName = new Map(
+      WA_DEFAULT_GRANTS.map((d) => [d.name.toLowerCase(), d.description])
+    )
     const rawCategorical = (grantRows ?? [])
       .filter((g) => g.grant_type === 'categorical')
-      .map((g) => {
-        const dbSpent = Number(g.spent_to_date)
-        const snapSpent = snapshotGrantSpent.get((g.name as string).toLowerCase()) ?? 0
-        return {
-          id: g.id as string,
-          name: g.name as string,
-          awardAmount: Number(g.award_amount),
-          spent: dbSpent > 0 ? dbSpent : snapSpent,
-          status: (g.restrictions as GrantStatus) ?? 'on-pace',
-        }
-      })
+      .map((g) => ({
+        id: g.id as string,
+        name: g.name as string,
+        description: defaultDescByName.get((g.name as string).toLowerCase()),
+        awardAmount: Number(g.award_amount),
+        spent: 0,  // spent comes from snapshot, not DB
+        status: (g.restrictions as GrantStatus) ?? 'on-pace',
+      }))
     const grantByName = new Map<string, Grant>()
     for (const g of rawCategorical) {
       const key = g.name.toLowerCase()
@@ -663,13 +698,18 @@ export const useStore = create<AppState>((set, get) => ({
         notes: g.notes ?? '',
       }))
 
-    // Only overwrite grants from the DB table if it returned categorical rows.
-    // Otherwise, keep the snapshot-sourced grants (set earlier from financial_summary JSONB).
-    const grantUpdate: Partial<AppState> = { otherGrants: otherGrantList }
+    // grantAwards = DB table (Settings) as source of truth for award amounts.
+    // grants = merged view joining awards with spent from the active snapshot.
+    const activeSnap = get().monthlySnapshots[get().activeMonth]
+    const snapshotGrants = activeSnap?.grants ?? []
+
     if (categoricalGrants.length > 0) {
-      grantUpdate.grants = categoricalGrants
+      const merged = mergeGrantsWithSnapshot(categoricalGrants, snapshotGrants)
+      set({ grantAwards: categoricalGrants, grants: merged, otherGrants: otherGrantList })
+    } else {
+      // No grants in DB — keep snapshot-sourced grants as fallback for both
+      set({ otherGrants: otherGrantList })
     }
-    set(grantUpdate)
 
     // 4. Load board packets
     const { data: packetRows } = await supabase
@@ -766,6 +806,9 @@ export const useStore = create<AppState>((set, get) => ({
       })
     }
 
+    // Seed default WA categorical grants if the school has none yet
+    get().seedDefaultGrants()
+
     set({ isLoaded: true })
   },
 
@@ -826,8 +869,8 @@ export const useStore = create<AppState>((set, get) => ({
         categories: snap.budgetCategories,
         monthlySpend: snap.monthlySpend,
       },
-      // grants are NOT reset here — they come from the grants DB table
-      // (loaded once in loadFromSupabase step 3) and are month-independent.
+      // Re-merge grants: award amounts from grantAwards (Settings), spent from this month's snapshot.
+      grants: mergeGrantsWithSnapshot(get().grantAwards, snap.grants),
       alerts: snap.alerts,
     })
   },
@@ -868,8 +911,7 @@ export const useStore = create<AppState>((set, get) => ({
         categories: newSnap.budgetCategories,
         monthlySpend: newSnap.monthlySpend,
       }
-      // grants are NOT reset here — they come from the grants DB table
-      // (loaded once in loadFromSupabase step 3) and are month-independent.
+      newState.grants = mergeGrantsWithSnapshot(get().grantAwards, newSnap.grants)
       newState.alerts = newSnap.alerts
     }
 
@@ -904,15 +946,18 @@ export const useStore = create<AppState>((set, get) => ({
   addGrant: (grant) => {
     // Deduplicate by name — if a grant with the same name exists, update it instead of adding a duplicate.
     set((state) => {
-      const existingIdx = state.grants.findIndex(
+      const existingIdx = state.grantAwards.findIndex(
         (g) => g.name.toLowerCase() === grant.name.toLowerCase()
       )
+      let newAwards: Grant[]
       if (existingIdx >= 0) {
-        const updated = [...state.grants]
-        updated[existingIdx] = { ...updated[existingIdx], ...grant }
-        return { grants: updated }
+        newAwards = [...state.grantAwards]
+        newAwards[existingIdx] = { ...newAwards[existingIdx], ...grant }
+      } else {
+        newAwards = [...state.grantAwards, grant]
       }
-      return { grants: [...state.grants, grant] }
+      const snap = state.monthlySnapshots[state.activeMonth]
+      return { grantAwards: newAwards, grants: mergeGrantsWithSnapshot(newAwards, snap?.grants ?? []) }
     })
     const { schoolId } = get()
     if (schoolId) {
@@ -932,9 +977,11 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   updateGrant: (id, updates) => {
-    set((state) => ({
-      grants: state.grants.map((g) => (g.id === id ? { ...g, ...updates } : g)),
-    }))
+    set((state) => {
+      const newAwards = state.grantAwards.map((g) => (g.id === id ? { ...g, ...updates } : g))
+      const snap = state.monthlySnapshots[state.activeMonth]
+      return { grantAwards: newAwards, grants: mergeGrantsWithSnapshot(newAwards, snap?.grants ?? []) }
+    })
     const { schoolId } = get()
     if (schoolId) {
       writeThrough(async (supabase) => {
@@ -956,12 +1003,54 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   removeGrant: (id) => {
-    set((state) => ({ grants: state.grants.filter((g) => g.id !== id) }))
+    set((state) => {
+      const newAwards = state.grantAwards.filter((g) => g.id !== id)
+      const snap = state.monthlySnapshots[state.activeMonth]
+      return { grantAwards: newAwards, grants: mergeGrantsWithSnapshot(newAwards, snap?.grants ?? []) }
+    })
     const { schoolId } = get()
     if (schoolId) {
       writeThrough(async (supabase) => {
         const { error } = await supabase.from('grants').delete().eq('id', id)
         if (error) console.error('[store] removeGrant', error)
+      })
+    }
+  },
+
+  seedDefaultGrants: () => {
+    const { grantAwards, schoolId, monthlySnapshots, activeMonth } = get()
+    // Only seed if no categorical grants exist yet
+    if (grantAwards.length > 0) return
+
+    const defaults: Grant[] = WA_DEFAULT_GRANTS.map((g) => ({
+      id: crypto.randomUUID(),
+      name: g.name,
+      description: g.description,
+      awardAmount: 0,
+      spent: 0,
+      status: 'on-pace' as GrantStatus,
+    }))
+
+    const snap = monthlySnapshots[activeMonth]
+    set({
+      grantAwards: defaults,
+      grants: mergeGrantsWithSnapshot(defaults, snap?.grants ?? []),
+    })
+
+    if (schoolId) {
+      writeThrough(async (supabase) => {
+        const rows = defaults.map((g, i) => ({
+          id: g.id,
+          school_id: schoolId,
+          grant_type: 'categorical',
+          name: g.name,
+          award_amount: 0,
+          spent_to_date: 0,
+          restrictions: 'on-pace',
+          sort_order: i,
+        }))
+        const { error } = await supabase.from('grants').insert(rows)
+        if (error) console.error('[store] seedDefaultGrants', error)
       })
     }
   },
@@ -1188,25 +1277,33 @@ export const useStore = create<AppState>((set, get) => ({
       monthlySpend: [],
     }
 
-    set((state) => ({
-      monthlySnapshots: { ...state.monthlySnapshots, [month]: newSnapshot },
-      activeMonth: month,
-      financialData: {
-        ...state.financialData,
-        totalBudget,
-        revenueBudget,
-        ytdSpending: totalActuals,
-        ytdRevenue,
-        ytdExpenses,
-        cashOnHand,
-        daysOfReserves,
-        variancePercent,
-        categories: newCategories,
-        monthlySpend: [],
-      },
-      grants: snapshotGrants,
-      alerts: newAlerts,
-    }))
+    set((state) => {
+      // When imports bring grants, update grantAwards (the master list) with new award amounts.
+      // Then merge with snapshot spent data to produce the display grants.
+      const newAwards = importedGrants && importedGrants.length > 0
+        ? snapshotGrants.map((sg) => ({ ...sg, spent: 0 }))  // awards store base data, spent=0
+        : state.grantAwards
+      return {
+        monthlySnapshots: { ...state.monthlySnapshots, [month]: newSnapshot },
+        activeMonth: month,
+        financialData: {
+          ...state.financialData,
+          totalBudget,
+          revenueBudget,
+          ytdSpending: totalActuals,
+          ytdRevenue,
+          ytdExpenses,
+          cashOnHand,
+          daysOfReserves,
+          variancePercent,
+          categories: newCategories,
+          monthlySpend: [],
+        },
+        grantAwards: newAwards,
+        grants: mergeGrantsWithSnapshot(newAwards, snapshotGrants),
+        alerts: newAlerts,
+      }
+    })
 
     const { schoolId } = get()
     if (schoolId) {
@@ -1519,6 +1616,7 @@ export const useStore = create<AppState>((set, get) => ({
       categories: [],
       monthlySpend: [],
     },
+    grantAwards: [],
     grants: [],
     otherGrants: [],
     alerts: [],

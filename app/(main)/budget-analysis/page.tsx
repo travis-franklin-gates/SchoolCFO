@@ -96,15 +96,18 @@ export default function BudgetAnalysisPage() {
     return { ...cat, alertStatus, varianceDollar }
   })
 
+  const expenseCategories = categories.filter((c) => c.accountType === 'expense')
+  const revenueCategories = categories.filter((c) => c.accountType === 'revenue')
+
   const toggleRow = (name: string) => {
     setExpanded((prev) => (prev === name ? null : name))
   }
 
-  const totalBudget = categories.reduce((s, c) => s + c.budget, 0)
-  const totalYtd    = categories.reduce((s, c) => s + c.ytdActuals, 0)
-  const totalVarianceDollar = categories.reduce((s, c) => s + c.varianceDollar, 0)
+  const totalBudget = expenseCategories.reduce((s, c) => s + c.budget, 0)
+  const totalYtd    = expenseCategories.reduce((s, c) => s + c.ytdActuals, 0)
+  const totalVarianceDollar = expenseCategories.reduce((s, c) => s + c.varianceDollar, 0)
   const totalBurnRate = totalBudget > 0 ? (totalYtd / totalBudget) * 100 : 0
-  const totalProjYearEnd = categories.reduce((s, c) => s + c.projectedYearEnd, 0)
+  const totalProjYearEnd = expenseCategories.reduce((s, c) => s + c.projectedYearEnd, 0)
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -148,7 +151,7 @@ export default function BudgetAnalysisPage() {
           <div className="text-center">Status</div>
         </div>
 
-        {categories.map((cat) => {
+        {expenseCategories.map((cat) => {
           const cfg = statusConfig[cat.alertStatus]
           const isExpanded = expanded === cat.name
           const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok'
@@ -231,9 +234,9 @@ export default function BudgetAnalysisPage() {
           )
         })}
 
-        {/* Totals Row */}
+        {/* Expense Totals Row */}
         <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 px-4 py-3.5 bg-gray-50 border-t-2 border-gray-200 text-sm font-semibold text-gray-800">
-          <div className="pl-5">Total</div>
+          <div className="pl-5">Total Expenses</div>
           <div className="text-right">{fmt(totalBudget)}</div>
           <div className="text-right">{fmt(totalYtd)}</div>
           <div className={`text-right ${totalVarianceDollar > 0 ? 'text-red-600' : 'text-green-600'}`}>
@@ -257,11 +260,90 @@ export default function BudgetAnalysisPage() {
           </div>
           <div />
         </div>
+
+        {/* Revenue Section */}
+        {revenueCategories.length > 0 && (
+          <>
+            <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 bg-[#1e3a5f]/5 border-t-2 border-[#1e3a5f]/20 px-4 py-2.5 text-xs font-semibold text-[#1e3a5f] uppercase tracking-wide">
+              <div>Revenue</div>
+              <div /><div /><div /><div /><div /><div />
+            </div>
+
+            {revenueCategories.map((cat) => {
+              const cfg = statusConfig[cat.alertStatus]
+              const isExpanded = expanded === cat.name
+              const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok'
+              const bc = burnColor(cat.burnRate)
+
+              return (
+                <div key={cat.name}>
+                  <div
+                    className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_1.2fr] gap-0 px-4 py-3.5 border-b border-gray-100 text-sm transition-colors ${cfg.row} ${hasNarrative ? 'cursor-pointer hover:brightness-95' : ''}`}
+                    onClick={() => hasNarrative && toggleRow(cat.name)}
+                  >
+                    <div className="flex items-center gap-2 font-medium text-gray-800">
+                      {hasNarrative ? (
+                        isExpanded ? (
+                          <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                        ) : (
+                          <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                        )
+                      ) : (
+                        <span className="w-3.5 shrink-0" />
+                      )}
+                      {cat.name}
+                    </div>
+                    <div className="text-right text-gray-700">{fmt(cat.budget)}</div>
+                    <div className="text-right text-gray-700">{fmt(cat.ytdActuals)}</div>
+                    <div className={`text-right font-medium ${cat.varianceDollar > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {fmt(Math.round(cat.varianceDollar))}
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full ${bc.bar}`}
+                            style={{ width: `${Math.min(cat.burnRate, 100)}%` }}
+                          />
+                        </div>
+                        <span className={`tabular-nums w-10 text-right ${bc.text}`}>
+                          {cat.burnRate.toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className={`text-right font-medium ${cat.projectedYearEnd > cat.budget ? 'text-green-600' : 'text-gray-700'}`}>
+                      {fmt(cat.projectedYearEnd)}
+                    </div>
+                    <div className="flex justify-center">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${cfg.badge}`}>
+                        {cfg.label}
+                      </span>
+                    </div>
+                  </div>
+
+                  {isExpanded && cat.narrative && (
+                    <div className="px-12 py-4 bg-blue-50/60 border-b border-gray-100 border-l-4 border-l-blue-400">
+                      <div className="flex gap-3">
+                        <Info size={15} className="text-blue-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-semibold text-blue-800 mb-1 uppercase tracking-wide">
+                            CFO Analysis
+                          </p>
+                          <p className="text-sm text-blue-900 leading-relaxed">{cat.narrative}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </>
+        )}
       </div>
 
       {/* ── Mobile cards (below md) ── */}
       <div className="flex flex-col gap-3 md:hidden">
-        {categories.map((cat) => {
+        {expenseCategories.map((cat) => {
           const cfg = statusConfig[cat.alertStatus]
           const isExpanded = expanded === cat.name
           const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok'
@@ -359,10 +441,10 @@ export default function BudgetAnalysisPage() {
           )
         })}
 
-        {/* Totals card */}
+        {/* Expense Totals card */}
         <div className="bg-[#1e3a5f] rounded-xl shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-white/10">
-            <p className="text-sm font-semibold text-white">Total — All Categories</p>
+            <p className="text-sm font-semibold text-white">Total Expenses</p>
           </div>
           <div className="px-4 py-3 space-y-3">
             {/* Total burn rate bar */}
@@ -408,6 +490,107 @@ export default function BudgetAnalysisPage() {
             </div>
           </div>
         </div>
+
+        {/* Revenue cards */}
+        {revenueCategories.length > 0 && (
+          <>
+            <div className="px-3 py-2 bg-[#1e3a5f]/5 border-2 border-[#1e3a5f]/20 rounded-lg">
+              <p className="text-xs font-semibold text-[#1e3a5f] uppercase tracking-wide">Revenue</p>
+            </div>
+            {revenueCategories.map((cat) => {
+              const cfg = statusConfig[cat.alertStatus]
+              const isExpanded = expanded === cat.name
+              const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok'
+              const bc = burnColor(cat.burnRate)
+
+              return (
+                <div
+                  key={cat.name}
+                  className={`card-static overflow-hidden ${cfg.row}`}
+                >
+                  <div
+                    className={`flex items-center justify-between px-4 py-3 border-b border-gray-100 ${hasNarrative ? 'cursor-pointer' : ''}`}
+                    onClick={() => hasNarrative && toggleRow(cat.name)}
+                  >
+                    <div className="flex items-center gap-2 font-medium text-gray-800 text-sm">
+                      {hasNarrative ? (
+                        isExpanded
+                          ? <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                          : <ChevronRight size={14} className="text-gray-400 shrink-0" />
+                      ) : (
+                        <span className="w-3.5 shrink-0" />
+                      )}
+                      {cat.name}
+                    </div>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.badge}`}>
+                      {cfg.label}
+                    </span>
+                  </div>
+
+                  <div className="px-4 py-3 space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-500">% of Budget Received</span>
+                        <span className={`text-sm font-semibold tabular-nums ${bc.text}`}>
+                          {cat.burnRate.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full ${bc.bar}`}
+                          style={{ width: `${Math.min(cat.burnRate, 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between mt-1 text-xs text-gray-400">
+                        <span>0%</span>
+                        <span className="text-gray-500">Expected: {PACE_PCT}%</span>
+                        <span>100%</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-gray-50 rounded-lg px-2 py-2">
+                        <p className="text-xs text-gray-400 mb-0.5">Budget</p>
+                        <p className="text-sm font-semibold text-gray-800">{fmt(cat.budget)}</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg px-2 py-2">
+                        <p className="text-xs text-gray-400 mb-0.5">YTD Actual</p>
+                        <p className="text-sm font-semibold text-gray-800">{fmt(cat.ytdActuals)}</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg px-2 py-2">
+                        <p className="text-xs text-gray-400 mb-0.5">Proj. Year-End</p>
+                        <p className={`text-sm font-semibold ${cat.projectedYearEnd > cat.budget ? 'text-green-600' : 'text-gray-800'}`}>
+                          {fmt(cat.projectedYearEnd)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs border-t border-gray-100 pt-2">
+                      <span className="text-gray-500">Variance vs expected pace</span>
+                      <span className={`font-medium ${cat.varianceDollar > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {cat.varianceDollar > 0 ? '+' : ''}{fmt(Math.round(cat.varianceDollar))}
+                      </span>
+                    </div>
+                  </div>
+
+                  {isExpanded && cat.narrative && (
+                    <div className="px-4 pb-4 border-t border-gray-100 bg-blue-50/60 border-l-4 border-l-blue-400">
+                      <div className="flex gap-2 pt-3">
+                        <Info size={14} className="text-blue-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-semibold text-blue-800 mb-1 uppercase tracking-wide">
+                            CFO Analysis
+                          </p>
+                          <p className="text-sm text-blue-900 leading-relaxed">{cat.narrative}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </>
+        )}
       </div>
 
       {/* Footer note */}

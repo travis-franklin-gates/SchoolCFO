@@ -245,7 +245,7 @@ export default function BoardPacketPage() {
           monthLabel,
           pace,
           totalBudget,
-          totalActuals: ytdSpending,
+          totalActuals: financialData.ytdExpenses,
           cashOnHand,
           daysOfReserves,
           variancePercent,
@@ -602,12 +602,12 @@ export default function BoardPacketPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-[#1e3a5f] bg-[#f0f4f8] font-semibold">
-                    <td className="px-3 py-2 text-gray-800">Total</td>
+                    <td className="px-3 py-2 text-gray-800">Total Expenses</td>
                     <td className="px-3 py-2 text-right text-gray-800">{fmtFull(totalBudget)}</td>
-                    <td className="px-3 py-2 text-right text-gray-800">{fmtFull(ytdSpending)}</td>
+                    <td className="px-3 py-2 text-right text-gray-800">{fmtFull(financialData.ytdExpenses)}</td>
                     <td className="px-3 py-2 text-right text-gray-600">{fmtFull(Math.round(totalBudget * pace))}</td>
-                    <td className={`px-3 py-2 text-right ${ytdSpending - Math.round(totalBudget * pace) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {ytdSpending - Math.round(totalBudget * pace) >= 0 ? '+' : ''}{fmtFull(ytdSpending - Math.round(totalBudget * pace))}
+                    <td className={`px-3 py-2 text-right ${financialData.ytdExpenses - Math.round(totalBudget * pace) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {financialData.ytdExpenses - Math.round(totalBudget * pace) >= 0 ? '+' : ''}{fmtFull(financialData.ytdExpenses - Math.round(totalBudget * pace))}
                     </td>
                     <td className="px-3 py-2 text-right text-gray-600">
                       {fmtPct(variancePercent)}

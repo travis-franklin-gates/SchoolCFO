@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     const spFtes = Number(schoolProfile?.currentFTES ?? 0)
 
     const fdBudget = Number(financialData?.totalBudget ?? 0)
-    const fdYtd = Number(financialData?.ytdSpending ?? 0)
+    const fdYtdExpenses = Number((financialData as Record<string, unknown>)?.ytdExpenses ?? financialData?.ytdSpending ?? 0)
     const fdCash = Number(financialData?.cashOnHand ?? 0)
     const fdDays = Number(financialData?.daysOfReserves ?? 0)
     const categories = Array.isArray(financialData?.categories)
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       : []
 
     const burnPct = fdBudget > 0
-      ? ((fdYtd / fdBudget) * 100).toFixed(1)
+      ? ((fdYtdExpenses / fdBudget) * 100).toFixed(1)
       : '0'
 
     const flagged = categories.filter((c) => c.alertStatus && c.alertStatus !== 'ok')
@@ -60,7 +60,7 @@ DATA THROUGH: ${monthLabel} — ${pacePercent}% expected budget pace
 
 FINANCIAL POSITION:
 - Annual Expense Budget: $${fdBudget.toLocaleString()}
-- YTD Spending: $${fdYtd.toLocaleString()} (${burnPct}% spent vs ${pacePercent}% expected)
+- YTD Expenses: $${fdYtdExpenses.toLocaleString()} (${burnPct}% spent vs ${pacePercent}% expected)
 - Cash on Hand: $${fdCash.toLocaleString()} (${fdDays} days of reserves)
 
 FLAGGED CATEGORIES:

@@ -207,10 +207,10 @@ export default function DashboardPage() {
     healthScore = { label: 'On Track', color: 'bg-green-100 text-green-700' }
   }
 
-  // Budget pace
+  // Budget pace — expense actuals vs expense budget
   const burnPct =
     financialData.totalBudget > 0
-      ? Math.round((financialData.ytdSpending / financialData.totalBudget) * 100)
+      ? Math.round((financialData.ytdExpenses / financialData.totalBudget) * 100)
       : 0
   const paceDelta = burnPct - PACE_PCT
 

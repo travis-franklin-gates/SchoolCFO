@@ -55,6 +55,7 @@ function buildSystemPrompt(
     totalBudget: number
     revenueBudget: number
     ytdSpending: number
+    ytdExpenses?: number
     cashOnHand: number
     daysOfReserves: number
     variancePercent: number
@@ -118,7 +119,7 @@ Current FTES: ${sp.currentFTES}
 
 FINANCIAL SNAPSHOT (${monthsElapsed} of ${totalMonths} months elapsed — ${pacePercent}% through fiscal year):
 - Annual Expense Budget: $${fd.totalBudget.toLocaleString()}${fd.revenueBudget > 0 ? `\n- Annual Revenue Budget: $${fd.revenueBudget.toLocaleString()}` : ''}
-- YTD Spending: $${fd.ytdSpending.toLocaleString()} (${fd.totalBudget > 0 ? ((fd.ytdSpending / fd.totalBudget) * 100).toFixed(1) : '0.0'}% of expense budget)
+- YTD Expenses: $${(fd.ytdExpenses ?? fd.ytdSpending).toLocaleString()} (${fd.totalBudget > 0 ? (((fd.ytdExpenses ?? fd.ytdSpending) / fd.totalBudget) * 100).toFixed(1) : '0.0'}% of expense budget)
 - Cash on Hand: $${fd.cashOnHand.toLocaleString()} (${fd.daysOfReserves} days of operating reserves)
 - Budget Variance: ${fd.variancePercent}%
 

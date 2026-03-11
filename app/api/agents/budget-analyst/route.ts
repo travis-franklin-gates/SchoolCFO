@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
 OVERALL:
 - Annual Expense Budget: $${totalBudget.toLocaleString()}
-- YTD Spending: $${ytdSpending.toLocaleString()} (${totalBudget > 0 ? ((ytdSpending / totalBudget) * 100).toFixed(1) : '0.0'}%)
+- YTD Expenses: $${ytdSpending.toLocaleString()} (${totalBudget > 0 ? ((ytdSpending / totalBudget) * 100).toFixed(1) : '0.0'}%)
 - Personnel as % of total spending: ${personnelPct}%
 
 CATEGORIES:

@@ -686,7 +686,13 @@ export default function DashboardPage() {
       )}
 
       {/* ── Agent Insights ────────────────────────────────────────────────── */}
-      {agentFindings.length > 0 && (
+      {agentFindings.length > 0 && (() => {
+        // When fiscal year is complete, filter out cash_sentinel forward-looking findings
+        const displayFindings = isFiscalYearComplete
+          ? agentFindings.filter((f) => f.agentName !== 'cash_sentinel')
+          : agentFindings
+        if (displayFindings.length === 0) return null
+        return (
         <div className="card-static p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -695,7 +701,7 @@ export default function DashboardPage() {
                 AI Agent Insights
               </h2>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                {agentFindings.length}
+                {displayFindings.length}
               </span>
             </div>
             {lastAgentRunAt && (
@@ -705,7 +711,7 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="space-y-2.5">
-            {agentFindings.slice(0, 6).map((finding) => {
+            {displayFindings.slice(0, 6).map((finding) => {
               const severityCfg = {
                 action: { badge: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
                 concern: { badge: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
@@ -733,7 +739,8 @@ export default function DashboardPage() {
             })}
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* ── Quick Actions ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

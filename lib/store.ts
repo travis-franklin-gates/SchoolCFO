@@ -105,12 +105,13 @@ const GRANT_CATEGORY_PREFIXES: Record<string, string[]> = {
   'Lunch Program / Food Service': ['lunch program', 'food service', 'national school lunch'],
 }
 
-/** Sum ytdActuals from budget categories whose names match any prefix for the given grant. */
+/** Sum ytdActuals from expense budget categories whose names match any prefix for the given grant. */
 function computeGrantSpentFromCategories(grantName: string, categories: BudgetCategory[]): number {
   const prefixes = GRANT_CATEGORY_PREFIXES[grantName]
   if (!prefixes || prefixes.length === 0) return 0
   let total = 0
   for (const cat of categories) {
+    if (cat.accountType !== 'expense') continue
     const lower = cat.name.toLowerCase()
     if (prefixes.some((p) => lower.startsWith(p))) {
       total += Math.abs(cat.ytdActuals)

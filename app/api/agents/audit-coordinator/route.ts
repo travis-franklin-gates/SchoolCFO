@@ -109,10 +109,10 @@ Return a JSON object with:
 - grade: letter grade (A/B/C/D/F)
 - priorityActions: array of top 3 objects with { action, timeEstimate, category }
 - executiveSummary: 2-3 paragraph summary suitable for board/authorizer (plain English, specific numbers)
-- categoryStatus: array of { category, label (human-readable), status ("ready"|"needs-attention"|"at-risk"|"not-reviewed"), itemCount, verifiedCount, gapCount }
+- categoryStatus: array of { category, label (human-readable), status ("ready"|"in-progress"|"needs-attention"|"at-risk"|"not-started"), itemCount, verifiedCount, gapCount }. Status rules: "ready" only when ALL items are verified. "in-progress" when some but not all items are verified. "not-started" when 0 items are verified (even if all are manual). "at-risk" and "needs-attention" take priority when action/warning items exist.
 - estimatedTimeToReady: overall time estimate to achieve full readiness
 
-Scoring guide: Each verified item adds points proportionally. Action items reduce score heavily. Warnings reduce moderately. Manual items score neutral (neither help nor hurt). Federal findings reduce score based on severity.
+Scoring guide: Each verified item adds points proportionally. Action items reduce score heavily. Warnings reduce moderately. Manual items score neutral (neither help nor hurt). A category with zero verified items cannot contribute positively to the readiness score. Only categories with ALL items verified count as "ready". Federal findings reduce score based on severity.
 
 Return ONLY the JSON object, no markdown fences.`
 

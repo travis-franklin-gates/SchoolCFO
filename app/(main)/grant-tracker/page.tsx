@@ -142,18 +142,24 @@ export default function GrantTrackerPage() {
               <div
                 key={grant.id}
                 className={`card-static p-5 ${
-                  grant.status === 'underspend-risk' ? 'border-orange-200' : ''
+                  !needsConfig && grant.status === 'underspend-risk' ? 'border-orange-200' : ''
                 }`}
               >
                 <div className="flex items-start justify-between mb-1">
                   <h3 className="font-semibold text-gray-800 text-sm leading-snug pr-2">
                     {grant.name}
                   </h3>
-                  <span
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shrink-0 ${cfg.badge}`}
-                  >
-                    {cfg.label}
-                  </span>
+                  {needsConfig ? (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shrink-0 bg-gray-100 text-gray-500">
+                      Not Configured
+                    </span>
+                  ) : (
+                    <span
+                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shrink-0 ${cfg.badge}`}
+                    >
+                      {cfg.label}
+                    </span>
+                  )}
                 </div>
                 {grant.description && (
                   <p className="text-xs text-gray-400 mb-3">{grant.description}</p>

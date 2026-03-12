@@ -589,21 +589,24 @@ export default function AuditPrepPage() {
   // Category status based on AI verification
   const getCategoryStatus = (catKey: string) => {
     const catItems = complianceItems.filter((i) => i.category === catKey)
-    if (catItems.length === 0) return 'not-reviewed' as const
+    if (catItems.length === 0) return 'not-started' as const
     const hasAction = catItems.some((i) => i.status === 'action')
     const hasWarning = catItems.some((i) => i.status === 'warning')
-    const allVerifiedOrManual = catItems.every((i) => i.status === 'verified' || i.status === 'manual')
+    const verifiedCount = catItems.filter((i) => i.status === 'verified').length
     if (hasAction) return 'at-risk' as const
     if (hasWarning) return 'needs-attention' as const
-    if (allVerifiedOrManual) return 'ready' as const
-    return 'not-reviewed' as const
+    if (verifiedCount === 0) return 'not-started' as const
+    const allVerified = catItems.every((i) => i.status === 'verified')
+    if (allVerified) return 'ready' as const
+    return 'in-progress' as const
   }
 
   const STATUS_CFG = {
     ready: { label: 'Ready', cls: 'bg-green-100 text-green-800' },
+    'in-progress': { label: 'In Progress', cls: 'bg-blue-100 text-blue-800' },
     'needs-attention': { label: 'Needs Attention', cls: 'bg-yellow-100 text-yellow-800' },
     'at-risk': { label: 'At Risk', cls: 'bg-red-100 text-red-800' },
-    'not-reviewed': { label: 'Not Reviewed', cls: 'bg-gray-100 text-gray-600' },
+    'not-started': { label: 'Not Started', cls: 'bg-gray-100 text-gray-600' },
   } as const
 
   // ── Export PDF ──────────────────────────────────────────────────────────────
@@ -677,12 +680,13 @@ export default function AuditPrepPage() {
 
   // Derived
   const categoryStatuses = AUDIT_CATEGORIES.map((cat) =>
-    complianceItems.length > 0 ? getCategoryStatus(cat.key) : 'not-reviewed' as const
+    complianceItems.length > 0 ? getCategoryStatus(cat.key) : 'not-started' as const
   )
   const readyCount = categoryStatuses.filter((s) => s === 'ready').length
+  const inProgressCount = categoryStatuses.filter((s) => s === 'in-progress').length
   const atRiskCount = categoryStatuses.filter((s) => s === 'at-risk').length
   const needsAttentionCount = categoryStatuses.filter((s) => s === 'needs-attention').length
-  const notReviewedCount = categoryStatuses.filter((s) => s === 'not-reviewed').length
+  const notStartedCount = categoryStatuses.filter((s) => s === 'not-started').length
 
   const gradeColor = assessment ? {
     A: 'text-green-600', B: 'text-blue-600', C: 'text-yellow-600', D: 'text-orange-600', F: 'text-red-600',
@@ -867,12 +871,18 @@ export default function AuditPrepPage() {
       )}
 
       {/* Readiness Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="card-static p-4 text-center">
           <div className="text-2xl font-bold" style={{ color: 'var(--brand-700)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
             {readyCount}/{AUDIT_CATEGORIES.length}
           </div>
-          <div className="text-xs text-gray-500 mt-1">Areas Ready</div>
+          <div className="text-xs text-gray-500 mt-1">Ready</div>
+        </div>
+        <div className="card-static p-4 text-center">
+          <div className="text-2xl font-bold text-blue-600" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+            {inProgressCount}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">In Progress</div>
         </div>
         <div className="card-static p-4 text-center">
           <div className="text-2xl font-bold text-yellow-600" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
@@ -888,9 +898,9 @@ export default function AuditPrepPage() {
         </div>
         <div className="card-static p-4 text-center">
           <div className="text-2xl font-bold text-gray-400" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
-            {notReviewedCount}
+            {notStartedCount}
           </div>
-          <div className="text-xs text-gray-500 mt-1">Not Reviewed</div>
+          <div className="text-xs text-gray-500 mt-1">Not Started</div>
         </div>
       </div>
 

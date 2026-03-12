@@ -1,24 +1,38 @@
 'use client'
 
-import { useStore, type GrantStatus, type OtherGrantRestrictions } from '@/lib/store'
+import { useStore, type OtherGrantRestrictions } from '@/lib/store'
 import { paceFromKey } from '@/lib/fiscalYear'
 
-const statusConfig: Record<GrantStatus, { label: string; badge: string; bar: string }> = {
+type SpendStatus = 'on-pace' | 'underspent' | 'overspent' | 'over-budget'
+
+const statusConfig: Record<SpendStatus, { label: string; badge: string; bar: string }> = {
   'on-pace': {
     label: 'On Pace',
     badge: 'bg-green-100 text-green-800',
     bar: 'bg-green-500',
   },
-  watch: {
-    label: 'Watch',
+  underspent: {
+    label: 'Underspent',
     badge: 'bg-yellow-100 text-yellow-800',
     bar: 'bg-yellow-500',
   },
-  'underspend-risk': {
-    label: 'Underspend Risk',
-    badge: 'bg-orange-100 text-orange-800',
-    bar: 'bg-orange-500',
+  overspent: {
+    label: 'Overspent',
+    badge: 'bg-red-100 text-red-800',
+    bar: 'bg-red-500',
   },
+  'over-budget': {
+    label: 'Over Budget',
+    badge: 'bg-red-100 text-red-800',
+    bar: 'bg-red-600',
+  },
+}
+
+function getSpendStatus(spentPct: number, pacePct: number): SpendStatus {
+  if (spentPct > 100) return 'over-budget'
+  if (spentPct > pacePct + 10) return 'overspent'
+  if (spentPct < pacePct - 10) return 'underspent'
+  return 'on-pace'
 }
 
 const restrictionConfig: Record<OtherGrantRestrictions, { label: string; badge: string }> = {
@@ -132,17 +146,19 @@ export default function GrantTrackerPage() {
         {/* Grant cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {grants.map((grant) => {
-            const cfg = statusConfig[grant.status]
             const spentPct = grant.awardAmount > 0 ? (grant.spent / grant.awardAmount) * 100 : 0
             const remaining = grant.awardAmount - grant.spent
             const paceGap = spentPct - pacePct
             const needsConfig = grant.awardAmount === 0
+            const spendStatus = getSpendStatus(spentPct, pacePct)
+            const cfg = statusConfig[spendStatus]
 
             return (
               <div
                 key={grant.id}
                 className={`card-static p-5 ${
-                  !needsConfig && grant.status === 'underspend-risk' ? 'border-orange-200' : ''
+                  !needsConfig && (spendStatus === 'overspent' || spendStatus === 'over-budget') ? 'border-red-200' :
+                  !needsConfig && spendStatus === 'underspent' ? 'border-yellow-200' : ''
                 }`}
               >
                 <div className="flex items-start justify-between mb-1">
@@ -219,9 +235,19 @@ export default function GrantTrackerPage() {
                           style={{ width: `${Math.min(spentPct, 100)}%` }}
                         />
                       </div>
-                      {grant.status === 'underspend-risk' && (
-                        <p className="text-xs text-orange-700 mt-2">
+                      {spendStatus === 'underspent' && (
+                        <p className="text-xs text-yellow-700 mt-2">
                           {Math.abs(paceGap).toFixed(0)}% below expected pace — verify allowable expenses
+                        </p>
+                      )}
+                      {spendStatus === 'overspent' && (
+                        <p className="text-xs text-red-700 mt-2">
+                          {Math.abs(paceGap).toFixed(0)}% above expected pace — review spending
+                        </p>
+                      )}
+                      {spendStatus === 'over-budget' && (
+                        <p className="text-xs text-red-700 mt-2">
+                          Spending exceeds award amount by ${Math.abs(remaining).toLocaleString()}
                         </p>
                       )}
                     </div>

@@ -9,7 +9,9 @@ function fmt(n: number) {
   return n >= 0 ? `$${n.toLocaleString()}` : `-$${Math.abs(n).toLocaleString()}`
 }
 
-const statusConfig: Record<BudgetAlertStatus, { label: string; badge: string; row: string }> = {
+type StatusCfg = { label: string; badge: string; row: string }
+
+const statusConfig: Record<BudgetAlertStatus, StatusCfg> = {
   ok: {
     label: 'On Track',
     badge: 'bg-green-100 text-green-800',
@@ -29,6 +31,29 @@ const statusConfig: Record<BudgetAlertStatus, { label: string; badge: string; ro
     label: 'Action Required',
     badge: 'bg-red-100 text-red-800',
     row: 'bg-red-50/30',
+  },
+}
+
+const revenueStatusConfig: Record<BudgetAlertStatus, StatusCfg> = {
+  ok: {
+    label: 'On Track',
+    badge: 'bg-green-100 text-green-800',
+    row: '',
+  },
+  watch: {
+    label: 'Watch',
+    badge: 'bg-yellow-100 text-yellow-800',
+    row: 'bg-yellow-50/40',
+  },
+  concern: {
+    label: 'Concern',
+    badge: 'bg-orange-100 text-orange-800',
+    row: 'bg-orange-50/40',
+  },
+  action: {
+    label: 'Above Budget',
+    badge: 'bg-green-100 text-green-800',
+    row: '',
   },
 }
 
@@ -79,6 +104,15 @@ export default function BudgetAnalysisPage() {
     return 'ok'
   }
 
+  // Revenue: over-budget is good, under-budget is concerning (inverted logic).
+  const deriveRevenueAlertStatus = (burnRate: number): BudgetAlertStatus => {
+    const pp = burnRate - PACE_PCT
+    if (pp > 0) return 'action'     // above budget → "Above Budget" (green)
+    if (pp >= -10) return 'ok'      // within 10% → "On Track" (green)
+    if (pp >= -20) return 'watch'   // 10-20% below → "Watch" (yellow)
+    return 'concern'                // >20% below → "Concern" (orange)
+  }
+
   // Thresholds (pp over expected pace): +5 → watch, +10 → concern, +20 → action
   const burnColor = (burnRate: number) => {
     const pp = burnRate - PACE_PCT
@@ -92,7 +126,9 @@ export default function BudgetAnalysisPage() {
     const expectedToDate = cat.budget * PACE
     const varianceDollar = cat.ytdActuals - expectedToDate
     // Override stored alertStatus with re-derived value based on current fiscal pace
-    const alertStatus = deriveAlertStatus(cat.burnRate)
+    const alertStatus = cat.accountType === 'revenue'
+      ? deriveRevenueAlertStatus(cat.burnRate)
+      : deriveAlertStatus(cat.burnRate)
     return { ...cat, alertStatus, varianceDollar }
   })
 
@@ -270,9 +306,9 @@ export default function BudgetAnalysisPage() {
             </div>
 
             {revenueCategories.map((cat) => {
-              const cfg = statusConfig[cat.alertStatus]
+              const cfg = revenueStatusConfig[cat.alertStatus]
               const isExpanded = expanded === cat.name
-              const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok'
+              const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok' && cat.alertStatus !== 'action'
               const bc = burnColor(cat.burnRate)
 
               return (
@@ -498,9 +534,9 @@ export default function BudgetAnalysisPage() {
               <p className="text-xs font-semibold text-[#1e3a5f] uppercase tracking-wide">Revenue</p>
             </div>
             {revenueCategories.map((cat) => {
-              const cfg = statusConfig[cat.alertStatus]
+              const cfg = revenueStatusConfig[cat.alertStatus]
               const isExpanded = expanded === cat.name
-              const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok'
+              const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok' && cat.alertStatus !== 'action'
               const bc = burnColor(cat.burnRate)
 
               return (

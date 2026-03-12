@@ -52,8 +52,8 @@ const revenueStatusConfig: Record<BudgetAlertStatus, StatusCfg> = {
   },
   action: {
     label: 'Above Budget',
-    badge: 'bg-green-100 text-green-800',
-    row: '',
+    badge: 'bg-blue-100 text-blue-800',
+    row: 'bg-blue-50/30',
   },
 }
 
@@ -331,7 +331,7 @@ export default function BudgetAnalysisPage() {
                     </div>
                     <div className="text-right text-gray-700">{fmt(cat.budget)}</div>
                     <div className="text-right text-gray-700">{fmt(cat.ytdActuals)}</div>
-                    <div className={`text-right font-medium ${cat.varianceDollar > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <div className={`text-right font-medium ${cat.varianceDollar > 0 ? 'text-blue-600' : 'text-red-600'}`}>
                       {fmt(Math.round(cat.varianceDollar))}
                     </div>
                     <div className="text-right">
@@ -347,7 +347,7 @@ export default function BudgetAnalysisPage() {
                         </span>
                       </div>
                     </div>
-                    <div className={`text-right font-medium ${cat.projectedYearEnd > cat.budget ? 'text-green-600' : 'text-gray-700'}`}>
+                    <div className={`text-right font-medium ${cat.projectedYearEnd > cat.budget ? 'text-blue-600' : 'text-gray-700'}`}>
                       {fmt(cat.projectedYearEnd)}
                     </div>
                     <div className="flex justify-center">
@@ -595,7 +595,7 @@ export default function BudgetAnalysisPage() {
                       </div>
                       <div className="bg-gray-50 rounded-lg px-2 py-2">
                         <p className="text-xs text-gray-400 mb-0.5">Proj. Year-End</p>
-                        <p className={`text-sm font-semibold ${cat.projectedYearEnd > cat.budget ? 'text-green-600' : 'text-gray-800'}`}>
+                        <p className={`text-sm font-semibold ${cat.projectedYearEnd > cat.budget ? 'text-blue-600' : 'text-gray-800'}`}>
                           {fmt(cat.projectedYearEnd)}
                         </p>
                       </div>
@@ -603,7 +603,7 @@ export default function BudgetAnalysisPage() {
 
                     <div className="flex items-center justify-between text-xs border-t border-gray-100 pt-2">
                       <span className="text-gray-500">Variance vs expected pace</span>
-                      <span className={`font-medium ${cat.varianceDollar > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <span className={`font-medium ${cat.varianceDollar > 0 ? 'text-blue-600' : 'text-red-600'}`}>
                         {cat.varianceDollar > 0 ? '+' : ''}{fmt(Math.round(cat.varianceDollar))}
                       </span>
                     </div>

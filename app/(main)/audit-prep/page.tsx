@@ -834,16 +834,16 @@ export default function AuditPrepPage() {
 
           {/* Priority Actions */}
           {assessment.priorityActions.length > 0 && (
-            <div className="mb-4 p-4 bg-amber-50/80 border border-amber-200 rounded-lg">
-              <h4 className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <div className="mb-4 p-4 bg-orange-50/80 border border-orange-200 rounded-lg">
+              <h4 className="text-xs font-semibold text-orange-800 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                 <AlertTriangle size={12} />
                 Top 3 Priority Actions
               </h4>
               <ol className="list-decimal list-inside space-y-1.5">
                 {assessment.priorityActions.slice(0, 3).map((pa, i) => (
-                  <li key={i} className="text-sm text-amber-900">
+                  <li key={i} className="text-sm text-orange-900">
                     {pa.action}
-                    <span className="text-xs text-amber-600 ml-1">({pa.timeEstimate})</span>
+                    <span className="text-xs text-orange-600 ml-1">({pa.timeEstimate})</span>
                   </li>
                 ))}
               </ol>

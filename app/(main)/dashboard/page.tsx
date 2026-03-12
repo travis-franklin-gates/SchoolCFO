@@ -203,7 +203,7 @@ export default function DashboardPage() {
   if (hasAction || lowReserves) {
     healthScore = { label: 'At Risk', color: 'bg-red-100 text-red-700' }
   } else if (hasConcern || watchReserves) {
-    healthScore = { label: 'Needs Attention', color: 'bg-amber-100 text-amber-700' }
+    healthScore = { label: 'Needs Attention', color: 'bg-yellow-100 text-yellow-700' }
   } else {
     healthScore = { label: 'On Track', color: 'bg-green-100 text-green-700' }
   }
@@ -387,7 +387,7 @@ export default function DashboardPage() {
             financialData.daysOfReserves >= 60
               ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
               : financialData.daysOfReserves >= 30
-              ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+              ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200'
               : 'bg-red-50 text-red-700 ring-1 ring-red-200'
           }`}>
             {financialData.daysOfReserves >= 60
@@ -414,7 +414,7 @@ export default function DashboardPage() {
               : paceDelta > 5
               ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
               : paceDelta > 0
-              ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+              ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200'
               : 'bg-green-50 text-green-700 ring-1 ring-green-200'
           }`}>
             {Math.abs(paceDelta) <= 2
@@ -432,7 +432,7 @@ export default function DashboardPage() {
         >
           <div className="flex items-center justify-between mb-1">
             <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif', letterSpacing: '0.08em' }}>Active Alerts</p>
-            <AlertTriangle className={actionCount + watchConcernCount > 0 ? 'text-amber-500' : 'text-gray-300'} size={16} />
+            <AlertTriangle className={actionCount + watchConcernCount > 0 ? 'text-yellow-500' : 'text-gray-300'} size={16} />
           </div>
           <p className="text-4xl font-extrabold text-gray-900 tracking-tight" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{actionCount + watchConcernCount}</p>
           <p className="text-sm mt-1.5" style={{ color: 'var(--text-tertiary)' }}>items need attention</p>
@@ -444,7 +444,7 @@ export default function DashboardPage() {
                 </span>
               )}
               {watchConcernCount > 0 && (
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200">
                   {watchConcernCount} Watch/Concern
                 </span>
               )}
@@ -476,7 +476,7 @@ export default function DashboardPage() {
               latestPacket?.status === 'finalized'
                 ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
                 : latestPacket?.status === 'draft'
-                ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200'
                 : 'bg-gray-100 text-gray-500 ring-1 ring-gray-200'
             }`}>
               Packet: {latestPacket ? packetStatusLabel[latestPacket.status] : 'Not started'}

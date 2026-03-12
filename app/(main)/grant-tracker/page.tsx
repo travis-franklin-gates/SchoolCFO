@@ -38,7 +38,7 @@ function getSpendStatus(spentPct: number, pacePct: number): SpendStatus {
 const restrictionConfig: Record<OtherGrantRestrictions, { label: string; badge: string }> = {
   unrestricted: { label: 'Unrestricted', badge: 'bg-green-100 text-green-800' },
   'multi-year': { label: 'Multi-Year', badge: 'bg-blue-100 text-blue-800' },
-  restricted: { label: 'Restricted', badge: 'bg-amber-100 text-amber-800' },
+  restricted: { label: 'Restricted', badge: 'bg-orange-100 text-orange-800' },
 }
 
 function fmtMonth(dateStr: string) {
@@ -135,7 +135,7 @@ export default function GrantTrackerPage() {
           <div className="text-right">
             <p className="text-xs text-gray-400">Expected pace: {pacePct}%</p>
             {unconfiguredCount > 0 && (
-              <p className="text-xs text-amber-600 mt-1">
+              <p className="text-xs text-orange-600 mt-1">
                 {unconfiguredCount} grant{unconfiguredCount > 1 ? 's' : ''} need award amounts —{' '}
                 <a href="/settings" className="underline">Settings</a>
               </p>
@@ -325,7 +325,7 @@ export default function GrantTrackerPage() {
                   <div
                     key={grant.id}
                     className={`card-static p-5 ${
-                      isLow ? 'border-amber-200' : ''
+                      isLow ? 'border-orange-200' : ''
                     }`}
                   >
                     <div className="flex items-start justify-between mb-1">
@@ -374,13 +374,13 @@ export default function GrantTrackerPage() {
                         />
                         <div
                           className={`h-2.5 rounded-full transition-all ${
-                            isLow ? 'bg-amber-500' : 'bg-[#1e3a5f]'
+                            isLow ? 'bg-orange-500' : 'bg-[#1e3a5f]'
                           }`}
                           style={{ width: `${Math.min(spentPct, 100)}%` }}
                         />
                       </div>
                       {isLow && (
-                        <p className="text-xs text-amber-700 mt-2">
+                        <p className="text-xs text-orange-700 mt-2">
                           {(grantPacePct - spentPct).toFixed(0)}% below grant-timeline pace — review
                           spending plan
                         </p>

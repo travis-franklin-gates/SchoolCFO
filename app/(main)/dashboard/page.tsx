@@ -260,6 +260,7 @@ export default function DashboardPage() {
   // Projections chart — based on active month snapshot only
   const projTotalBudget = financialData.totalBudget
   const activeFiscalIdx = fiscalIndexFromKey(activeMonth)
+  const isFiscalYearComplete = activeFiscalIdx === 12
   const activeYtd = financialData.ytdSpending
   const monthlyRunRate = activeFiscalIdx > 0 ? activeYtd / activeFiscalIdx : 0
 
@@ -555,11 +556,15 @@ export default function DashboardPage() {
                   Running cash balance through fiscal year end
                 </p>
               </div>
-              {goesNegative && snapshotCount >= 3 && (
+              {isFiscalYearComplete ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 ring-1 ring-gray-200">
+                  Fiscal year complete
+                </span>
+              ) : goesNegative && snapshotCount >= 3 ? (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-200">
                   <AlertTriangle size={12} /> Cash goes negative
                 </span>
-              )}
+              ) : null}
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -600,10 +605,10 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4 mt-2 text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
               <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-100 ring-1 ring-red-200" /> Below 30 days</span>
               <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-yellow-100 ring-1 ring-yellow-200" /> 30-45 days</span>
-              <span className="ml-auto">{canProject ? 'Based on current revenue & expense run rates' : 'Projections available after 3 months of data'}</span>
+              <span className="ml-auto">{isFiscalYearComplete ? 'Fiscal year complete — showing actuals only' : canProject ? 'Based on current revenue & expense run rates' : 'Projections available after 3 months of data'}</span>
             </div>
-            {/* Cash Sentinel findings */}
-            {cashFindings.length > 0 && (
+            {/* Cash Sentinel findings — suppress forward-looking warnings when fiscal year is complete */}
+            {cashFindings.length > 0 && !isFiscalYearComplete && (
               <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center gap-1.5 mb-2">
                   <Bot size={13} style={{ color: 'var(--brand-500)' }} />
@@ -619,6 +624,13 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+            {isFiscalYearComplete && (
+              <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  This fiscal year is complete. Cash projections and forward-looking warnings are not applicable for this period.
+                </p>
               </div>
             )}
           </div>

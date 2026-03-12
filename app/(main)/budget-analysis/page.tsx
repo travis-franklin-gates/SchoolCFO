@@ -122,6 +122,15 @@ export default function BudgetAnalysisPage() {
     return           { bar: 'bg-green-500',    text: 'text-green-700' }
   }
 
+  // Revenue: over-pace is positive (blue), under-pace is concerning
+  const revenueBurnColor = (burnRate: number) => {
+    const pp = burnRate - PACE_PCT
+    if (pp > 0)   return { bar: 'bg-blue-500',    text: 'text-blue-600 font-semibold' }
+    if (pp >= -10) return { bar: 'bg-green-500',   text: 'text-green-700' }
+    if (pp >= -20) return { bar: 'bg-yellow-400',  text: 'text-yellow-700' }
+    return            { bar: 'bg-orange-400',   text: 'text-orange-600 font-semibold' }
+  }
+
   const categories = financialData.categories.map((cat) => {
     const expectedToDate = cat.budget * PACE
     const varianceDollar = cat.ytdActuals - expectedToDate
@@ -309,7 +318,7 @@ export default function BudgetAnalysisPage() {
               const cfg = revenueStatusConfig[cat.alertStatus]
               const isExpanded = expanded === cat.name
               const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok' && cat.alertStatus !== 'action'
-              const bc = burnColor(cat.burnRate)
+              const bc = revenueBurnColor(cat.burnRate)
 
               return (
                 <div key={cat.name}>
@@ -537,7 +546,7 @@ export default function BudgetAnalysisPage() {
               const cfg = revenueStatusConfig[cat.alertStatus]
               const isExpanded = expanded === cat.name
               const hasNarrative = !!cat.narrative && cat.alertStatus !== 'ok' && cat.alertStatus !== 'action'
-              const bc = burnColor(cat.burnRate)
+              const bc = revenueBurnColor(cat.burnRate)
 
               return (
                 <div

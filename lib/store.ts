@@ -707,8 +707,8 @@ export const useStore = create<AppState>((set, get) => ({
       const merged = mergeGrantsWithSnapshot(categoricalGrants, snapshotGrants)
       set({ grantAwards: categoricalGrants, grants: merged, otherGrants: otherGrantList })
     } else {
-      // No grants in DB — keep snapshot-sourced grants as fallback for both
-      set({ otherGrants: otherGrantList })
+      // No categorical grants in DB — clear grantAwards so seedDefaultGrants can run
+      set({ grantAwards: [], grants: [], otherGrants: otherGrantList })
     }
 
     // 4. Load board packets
@@ -807,7 +807,36 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     // Seed default WA categorical grants if the school has none yet
-    get().seedDefaultGrants()
+    const currentAwards = get().grantAwards
+    if (currentAwards.length === 0) {
+      const defaults: Grant[] = WA_DEFAULT_GRANTS.map((g) => ({
+        id: crypto.randomUUID(),
+        name: g.name,
+        description: g.description,
+        awardAmount: 0,
+        spent: 0,
+        status: 'on-pace' as GrantStatus,
+      }))
+      const snap = get().monthlySnapshots[get().activeMonth]
+      set({
+        grantAwards: defaults,
+        grants: mergeGrantsWithSnapshot(defaults, snap?.grants ?? []),
+      })
+      const seedRows = defaults.map((g, i) => ({
+        id: g.id,
+        school_id: schoolId,
+        grant_type: 'categorical',
+        name: g.name,
+        award_amount: 0,
+        spent_to_date: 0,
+        restrictions: 'on-pace',
+        sort_order: i,
+      }))
+      const { error: seedErr } = await supabase.from('grants').insert(seedRows)
+      if (seedErr) {
+        console.error('[store] seed grants insert failed:', seedErr.message, seedErr.code, seedErr.details, seedErr.hint)
+      }
+    }
 
     set({ isLoaded: true })
   },
@@ -1021,6 +1050,10 @@ export const useStore = create<AppState>((set, get) => ({
     const { grantAwards, schoolId, monthlySnapshots, activeMonth } = get()
     // Only seed if no categorical grants exist yet
     if (grantAwards.length > 0) return
+    if (!schoolId) {
+      console.warn('[store] seedDefaultGrants: no schoolId, skipping DB insert')
+      return
+    }
 
     const defaults: Grant[] = WA_DEFAULT_GRANTS.map((g) => ({
       id: crypto.randomUUID(),
@@ -1037,22 +1070,22 @@ export const useStore = create<AppState>((set, get) => ({
       grants: mergeGrantsWithSnapshot(defaults, snap?.grants ?? []),
     })
 
-    if (schoolId) {
-      writeThrough(async (supabase) => {
-        const rows = defaults.map((g, i) => ({
-          id: g.id,
-          school_id: schoolId,
-          grant_type: 'categorical',
-          name: g.name,
-          award_amount: 0,
-          spent_to_date: 0,
-          restrictions: 'on-pace',
-          sort_order: i,
-        }))
-        const { error } = await supabase.from('grants').insert(rows)
-        if (error) console.error('[store] seedDefaultGrants', error)
-      })
-    }
+    writeThrough(async (supabase) => {
+      const rows = defaults.map((g, i) => ({
+        id: g.id,
+        school_id: schoolId,
+        grant_type: 'categorical',
+        name: g.name,
+        award_amount: 0,
+        spent_to_date: 0,
+        restrictions: 'on-pace',
+        sort_order: i,
+      }))
+      const { error } = await supabase.from('grants').insert(rows)
+      if (error) {
+        console.error('[store] seedDefaultGrants insert failed:', error.message, error.code, error.details, error.hint)
+      }
+    })
   },
 
   addOtherGrant: (grant) => {

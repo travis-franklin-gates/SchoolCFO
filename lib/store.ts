@@ -89,6 +89,36 @@ export const WA_DEFAULT_GRANTS: { name: string; description: string }[] = [
   { name: 'Lunch Program / Food Service', description: 'Federal National School Lunch Program reimbursement' },
 ]
 
+/**
+ * Maps WA categorical grant names to budget category name prefixes (case-insensitive).
+ * When a grant has matching budget categories, their ytdActuals are summed as spent.
+ */
+const GRANT_CATEGORY_PREFIXES: Record<string, string[]> = {
+  'Title I Part A':          ['title i part a', 'federal title i revenue'],
+  'Title II Part A':         ['title ii part a'],
+  'Title IV Part A':         ['title iv part a'],
+  'IDEA (Special Education)':['idea special education', 'federal idea revenue'],
+  'LAP (Learning Assistance)':['lap -', 'state lap revenue'],
+  'TBIP (Transitional Bilingual)':['tbip -', 'state tbip revenue'],
+  'HiCap (Highly Capable)':  ['hicap -', 'state hicap revenue'],
+  'MSOC (Materials, Supplies & Operating Costs)': ['msoc -', 'msoc '],
+  'Lunch Program / Food Service': ['lunch program', 'food service', 'national school lunch'],
+}
+
+/** Sum ytdActuals from budget categories whose names match any prefix for the given grant. */
+function computeGrantSpentFromCategories(grantName: string, categories: BudgetCategory[]): number {
+  const prefixes = GRANT_CATEGORY_PREFIXES[grantName]
+  if (!prefixes || prefixes.length === 0) return 0
+  let total = 0
+  for (const cat of categories) {
+    const lower = cat.name.toLowerCase()
+    if (prefixes.some((p) => lower.startsWith(p))) {
+      total += Math.abs(cat.ytdActuals)
+    }
+  }
+  return total
+}
+
 export type OtherGrantRestrictions = 'unrestricted' | 'restricted' | 'multi-year'
 
 export interface OtherGrant {
@@ -418,12 +448,13 @@ function writeThrough(fn: (supabase: import('@supabase/supabase-js').SupabaseCli
 }
 
 /**
- * Merge grant award data (from Settings / DB table) with spent data from a snapshot.
- * Awards are the source of truth for which grants to show and their amounts;
- * spent comes from the active month's financial_summary.grants JSONB.
+ * Merge grant award data (from Settings / DB table) with spent data.
+ * Awards are the source of truth for which grants to show and their amounts.
+ * Spent is derived from budget categories via GRANT_CATEGORY_PREFIXES mapping,
+ * falling back to snapshot grants JSONB when no category matches are found.
  */
-function mergeGrantsWithSnapshot(awards: Grant[], snapshotGrants: Grant[]): Grant[] {
-  // Build lookup: lowercase name → spent, and id → spent
+function mergeGrantsWithSnapshot(awards: Grant[], snapshotGrants: Grant[], budgetCategories?: BudgetCategory[]): Grant[] {
+  // Build lookup: lowercase name → spent, and id → spent (fallback)
   const spentByName = new Map<string, number>()
   const spentById = new Map<string, number>()
   const statusByName = new Map<string, GrantStatus>()
@@ -434,7 +465,10 @@ function mergeGrantsWithSnapshot(awards: Grant[], snapshotGrants: Grant[]): Gran
   }
 
   return awards.map((award) => {
-    const spent = spentById.get(award.id) ?? spentByName.get(award.name.toLowerCase()) ?? 0
+    // Prefer spent derived from budget category mapping
+    const catSpent = budgetCategories ? computeGrantSpentFromCategories(award.name, budgetCategories) : 0
+    const snapshotSpent = spentById.get(award.id) ?? spentByName.get(award.name.toLowerCase()) ?? 0
+    const spent = catSpent > 0 ? catSpent : snapshotSpent
     const status = statusByName.get(award.name.toLowerCase()) ?? award.status
     return { ...award, spent, status }
   })
@@ -704,7 +738,7 @@ export const useStore = create<AppState>((set, get) => ({
     const snapshotGrants = activeSnap?.grants ?? []
 
     if (categoricalGrants.length > 0) {
-      const merged = mergeGrantsWithSnapshot(categoricalGrants, snapshotGrants)
+      const merged = mergeGrantsWithSnapshot(categoricalGrants, snapshotGrants, activeSnap?.budgetCategories)
       set({ grantAwards: categoricalGrants, grants: merged, otherGrants: otherGrantList })
     } else {
       // No categorical grants in DB — clear grantAwards so seedDefaultGrants can run
@@ -820,7 +854,7 @@ export const useStore = create<AppState>((set, get) => ({
       const snap = get().monthlySnapshots[get().activeMonth]
       set({
         grantAwards: defaults,
-        grants: mergeGrantsWithSnapshot(defaults, snap?.grants ?? []),
+        grants: mergeGrantsWithSnapshot(defaults, snap?.grants ?? [], snap?.budgetCategories),
       })
       const seedRows = defaults.map((g, i) => ({
         id: g.id,
@@ -899,7 +933,7 @@ export const useStore = create<AppState>((set, get) => ({
         monthlySpend: snap.monthlySpend,
       },
       // Re-merge grants: award amounts from grantAwards (Settings), spent from this month's snapshot.
-      grants: mergeGrantsWithSnapshot(get().grantAwards, snap.grants),
+      grants: mergeGrantsWithSnapshot(get().grantAwards, snap.grants, snap.budgetCategories),
       alerts: snap.alerts,
     })
   },
@@ -940,7 +974,7 @@ export const useStore = create<AppState>((set, get) => ({
         categories: newSnap.budgetCategories,
         monthlySpend: newSnap.monthlySpend,
       }
-      newState.grants = mergeGrantsWithSnapshot(get().grantAwards, newSnap.grants)
+      newState.grants = mergeGrantsWithSnapshot(get().grantAwards, newSnap.grants, newSnap.budgetCategories)
       newState.alerts = newSnap.alerts
     }
 
@@ -986,7 +1020,7 @@ export const useStore = create<AppState>((set, get) => ({
         newAwards = [...state.grantAwards, grant]
       }
       const snap = state.monthlySnapshots[state.activeMonth]
-      return { grantAwards: newAwards, grants: mergeGrantsWithSnapshot(newAwards, snap?.grants ?? []) }
+      return { grantAwards: newAwards, grants: mergeGrantsWithSnapshot(newAwards, snap?.grants ?? [], snap?.budgetCategories) }
     })
     const { schoolId } = get()
     if (schoolId) {
@@ -1009,7 +1043,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => {
       const newAwards = state.grantAwards.map((g) => (g.id === id ? { ...g, ...updates } : g))
       const snap = state.monthlySnapshots[state.activeMonth]
-      return { grantAwards: newAwards, grants: mergeGrantsWithSnapshot(newAwards, snap?.grants ?? []) }
+      return { grantAwards: newAwards, grants: mergeGrantsWithSnapshot(newAwards, snap?.grants ?? [], snap?.budgetCategories) }
     })
     const { schoolId } = get()
     if (schoolId) {
@@ -1035,7 +1069,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => {
       const newAwards = state.grantAwards.filter((g) => g.id !== id)
       const snap = state.monthlySnapshots[state.activeMonth]
-      return { grantAwards: newAwards, grants: mergeGrantsWithSnapshot(newAwards, snap?.grants ?? []) }
+      return { grantAwards: newAwards, grants: mergeGrantsWithSnapshot(newAwards, snap?.grants ?? [], snap?.budgetCategories) }
     })
     const { schoolId } = get()
     if (schoolId) {
@@ -1067,7 +1101,7 @@ export const useStore = create<AppState>((set, get) => ({
     const snap = monthlySnapshots[activeMonth]
     set({
       grantAwards: defaults,
-      grants: mergeGrantsWithSnapshot(defaults, snap?.grants ?? []),
+      grants: mergeGrantsWithSnapshot(defaults, snap?.grants ?? [], snap?.budgetCategories),
     })
 
     writeThrough(async (supabase) => {
@@ -1333,7 +1367,7 @@ export const useStore = create<AppState>((set, get) => ({
           monthlySpend: [],
         },
         grantAwards: newAwards,
-        grants: mergeGrantsWithSnapshot(newAwards, snapshotGrants),
+        grants: mergeGrantsWithSnapshot(newAwards, snapshotGrants, newCategories),
         alerts: newAlerts,
       }
     })

@@ -475,6 +475,13 @@ export default function SettingsPage() {
       ellPct: Number(profile.ellPct),
       hicapPct: Number(profile.hicapPct),
       iepPct: Number(profile.iepPct),
+      currentAssets: Number(profile.currentAssets),
+      currentLiabilities: Number(profile.currentLiabilities),
+      totalAssets: Number(profile.totalAssets),
+      totalLiabilities: Number(profile.totalLiabilities),
+      annualDepreciation: Number(profile.annualDepreciation),
+      annualDebtService: Number(profile.annualDebtService),
+      interestExpense: Number(profile.interestExpense),
     })
     setProfileSaved(true)
     setTimeout(() => setProfileSaved(false), 2500)
@@ -711,6 +718,60 @@ export default function SettingsPage() {
           <div>
             <label className={labelCls}>IEP %</label>
             <input type="number" min="0" max="100" step="0.1" value={profile.iepPct} onChange={(e) => setProfile({ ...profile, iepPct: Number(e.target.value) })} className={inputCls} />
+          </div>
+
+          {/* ── Balance Sheet (for FPF Scorecard) ── */}
+          <div className="col-span-2 pt-2 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Balance Sheet (for FPF Scorecard)</p>
+          </div>
+          <div>
+            <label className={labelCls}>Current Assets</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <input type="number" min="0" value={profile.currentAssets} onChange={(e) => setProfile({ ...profile, currentAssets: Number(e.target.value) })} className={`${inputCls} pl-6`} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Current Liabilities</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <input type="number" min="0" value={profile.currentLiabilities} onChange={(e) => setProfile({ ...profile, currentLiabilities: Number(e.target.value) })} className={`${inputCls} pl-6`} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Total Assets</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <input type="number" min="0" value={profile.totalAssets} onChange={(e) => setProfile({ ...profile, totalAssets: Number(e.target.value) })} className={`${inputCls} pl-6`} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Total Liabilities</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <input type="number" min="0" value={profile.totalLiabilities} onChange={(e) => setProfile({ ...profile, totalLiabilities: Number(e.target.value) })} className={`${inputCls} pl-6`} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Annual Depreciation</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <input type="number" min="0" value={profile.annualDepreciation} onChange={(e) => setProfile({ ...profile, annualDepreciation: Number(e.target.value) })} className={`${inputCls} pl-6`} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Annual Debt Service</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <input type="number" min="0" value={profile.annualDebtService} onChange={(e) => setProfile({ ...profile, annualDebtService: Number(e.target.value) })} className={`${inputCls} pl-6`} />
+            </div>
+          </div>
+          <div className="col-span-2">
+            <label className={labelCls}>Interest Expense</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <input type="number" min="0" value={profile.interestExpense} onChange={(e) => setProfile({ ...profile, interestExpense: Number(e.target.value) })} className={`${inputCls} pl-6`} />
+            </div>
           </div>
 
           <div className="col-span-2">

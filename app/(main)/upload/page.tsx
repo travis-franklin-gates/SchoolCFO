@@ -365,6 +365,23 @@ export default function UploadPage() {
       const hash = computeDataHash(s.schoolProfile, s.financialData, s.grants)
       s.setAgentDataHash(hash)
 
+      // Persist agent cache entries to DB
+      if (schoolId) {
+        import('@/lib/supabase').then(({ supabase }) => {
+          const agentNames = ['budget_analyst', 'cash_sentinel', 'grants_officer', 'audit_compliance', 'audit_federal']
+          const cacheRows = agentNames.map((name) => ({
+            school_id: schoolId,
+            agent_name: name,
+            data_hash: hash,
+            status: 'completed',
+            summary: `Analysis completed at ${now}`,
+            cached_at: now,
+          }))
+          supabase.from('agent_cache').upsert(cacheRows, { onConflict: 'school_id,agent_name' })
+            .then(({ error }) => { if (error) console.error('[agent_cache] upsert failed:', error) })
+        })
+      }
+
       // Trigger email notifications for concern/action findings
       if (schoolId) {
         fetch('/api/notifications/email', {

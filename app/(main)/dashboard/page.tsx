@@ -29,8 +29,9 @@ import Link from 'next/link'
 import { useStore, type AgentFinding } from '@/lib/store'
 import { generateCommissionExport } from '@/lib/commissionExport'
 import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
-import { buildRevenueModel, type RevenueSource } from '@/lib/revenueModel'
+import { buildRevenueModel, type RevenueSource, type RevenueLineResult } from '@/lib/revenueModel'
 import { computeDataHash } from '@/lib/agentCache'
+import { POSITION_BENCHMARKS, type PositionCategory } from '@/lib/positionBenchmarks'
 
 function fmt(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
@@ -95,6 +96,12 @@ export default function DashboardPage() {
   const [briefingAutoExpanded, setBriefingAutoExpanded] = useState(false)
   const [reanalyzing, setReanalyzing] = useState(false)
   const [exporting, setExporting] = useState(false)
+  // Revenue scenario overrides
+  const [scenarioEnrollment, setScenarioEnrollment] = useState<number | null>(null)
+  const [scenarioFrl, setScenarioFrl] = useState<number | null>(null)
+  const [scenarioIep, setScenarioIep] = useState<number | null>(null)
+  const [scenarioEll, setScenarioEll] = useState<number | null>(null)
+  const [scenarioHicap, setScenarioHicap] = useState<number | null>(null)
   const fetchedForRef = useRef<string | null>(null)
 
   const activeSnap = monthlySnapshots[activeMonth]
@@ -148,8 +155,20 @@ export default function DashboardPage() {
       const hash = computeDataHash(s.schoolProfile, s.financialData, s.grants)
       s.setAgentDataHash(hash)
 
-      // Reload findings from DB
+      // Persist agent cache entries to DB
       const { supabase } = await import('@/lib/supabase')
+      const agentNames = ['budget_analyst', 'cash_sentinel', 'grants_officer', 'audit_compliance', 'audit_federal']
+      const cacheRows = agentNames.map((name) => ({
+        school_id: schoolId,
+        agent_name: name,
+        data_hash: hash,
+        status: 'completed',
+        summary: `Analysis completed at ${now}`,
+        cached_at: now,
+      }))
+      await supabase.from('agent_cache').upsert(cacheRows, { onConflict: 'school_id,agent_name' })
+
+      // Reload findings from DB
       const { data: rows } = await supabase
         .from('agent_findings')
         .select('*')
@@ -895,34 +914,69 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Revenue Model ───────────────────────────────────────────────── */}
+      {/* ── Revenue Model — Scenario Explorer ────────────────────────────── */}
       {schoolProfile.headcount > 0 && (() => {
+        const isScenario = scenarioEnrollment != null || scenarioFrl != null || scenarioIep != null || scenarioEll != null || scenarioHicap != null
+        const scenarioProfile = {
+          ...schoolProfile,
+          headcount: scenarioEnrollment ?? schoolProfile.headcount,
+          frlPct: scenarioFrl ?? schoolProfile.frlPct,
+          iepPct: scenarioIep ?? schoolProfile.iepPct,
+          ellPct: scenarioEll ?? schoolProfile.ellPct,
+          hicapPct: scenarioHicap ?? schoolProfile.hicapPct,
+        }
         const revenueCategories = financialData.categories.filter((c) => c.accountType === 'revenue')
-        const revenueLines = buildRevenueModel(schoolProfile, financialAssumptions, revenueCategories)
+        const revenueLines = buildRevenueModel(scenarioProfile, financialAssumptions, revenueCategories)
         const totalExpected = revenueLines.reduce((s, l) => s + l.expected, 0)
         const totalActual = revenueLines.reduce((s, l) => s + l.actual, 0)
         const totalDelta = totalActual - totalExpected
 
-        const sourceLabels: Record<RevenueSource, string> = {
-          state: 'State & Local',
-          federal: 'Federal',
-          categorical: 'State Categorical',
-          other: 'Other',
-        }
+        const sourceLabels: Record<RevenueSource, string> = { state: 'State & Local', federal: 'Federal', categorical: 'State Categorical', other: 'Other' }
         const sources: RevenueSource[] = ['state', 'federal', 'categorical', 'other']
+        const resetScenario = () => { setScenarioEnrollment(null); setScenarioFrl(null); setScenarioIep(null); setScenarioEll(null); setScenarioHicap(null) }
 
         return (
           <div className="card-static p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div>
                 <h2 className="text-base font-semibold text-gray-800" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
-                  Revenue Model
+                  Revenue Model {isScenario && '— Scenario Explorer'}
                 </h2>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                  V8 Commission-aligned · {schoolProfile.headcount} headcount · {Math.round(schoolProfile.headcount * financialAssumptions.aafte_pct / 100)} AAFTE
+                  V8 Commission-aligned · {scenarioProfile.headcount} headcount · {Math.round(scenarioProfile.headcount * financialAssumptions.aafte_pct / 100)} AAFTE
+                  {isScenario && <span className="ml-1 text-amber-600 font-medium">(scenario — not saved)</span>}
                 </p>
               </div>
-              <Link href="/settings" className="text-xs text-[#1e3a5f] hover:underline">Edit assumptions →</Link>
+              <div className="flex items-center gap-2">
+                {isScenario && (
+                  <button onClick={resetScenario} className="text-xs text-red-500 hover:underline font-medium">Reset to Actuals</button>
+                )}
+                <Link href="/settings" className="text-xs text-[#1e3a5f] hover:underline">Edit assumptions →</Link>
+              </div>
+            </div>
+
+            {/* Scenario inputs */}
+            <div className="flex flex-wrap gap-3 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] font-medium text-gray-500 uppercase">Enrollment</label>
+                <input type="number" min="0" value={scenarioEnrollment ?? schoolProfile.headcount} onChange={(e) => setScenarioEnrollment(Number(e.target.value) || null)} className="w-20 px-2 py-1 text-xs border border-gray-200 rounded text-right tabular-nums" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] font-medium text-gray-500 uppercase">FRL%</label>
+                <input type="number" min="0" max="100" step="0.1" value={scenarioFrl ?? schoolProfile.frlPct} onChange={(e) => setScenarioFrl(Number(e.target.value))} className="w-16 px-2 py-1 text-xs border border-gray-200 rounded text-right tabular-nums" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] font-medium text-gray-500 uppercase">IEP%</label>
+                <input type="number" min="0" max="100" step="0.1" value={scenarioIep ?? schoolProfile.iepPct} onChange={(e) => setScenarioIep(Number(e.target.value))} className="w-16 px-2 py-1 text-xs border border-gray-200 rounded text-right tabular-nums" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] font-medium text-gray-500 uppercase">ELL%</label>
+                <input type="number" min="0" max="100" step="0.1" value={scenarioEll ?? schoolProfile.ellPct} onChange={(e) => setScenarioEll(Number(e.target.value))} className="w-16 px-2 py-1 text-xs border border-gray-200 rounded text-right tabular-nums" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] font-medium text-gray-500 uppercase">HiCap%</label>
+                <input type="number" min="0" max="100" step="0.1" value={scenarioHicap ?? schoolProfile.hicapPct} onChange={(e) => setScenarioHicap(Number(e.target.value))} className="w-16 px-2 py-1 text-xs border border-gray-200 rounded text-right tabular-nums" />
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -938,16 +992,12 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {sources.map((source) => {
-                    const group = revenueLines.filter((l) => l.source === source)
-                    if (group.every((l) => l.expected === 0 && l.actual === 0)) return null
+                    const group = revenueLines.filter((l: RevenueLineResult) => l.source === source)
+                    if (group.every((l: RevenueLineResult) => l.expected === 0 && l.actual === 0)) return null
                     return (
                       <React.Fragment key={source}>
-                        <tr>
-                          <td colSpan={5} className="pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                            {sourceLabels[source]}
-                          </td>
-                        </tr>
-                        {group.map((line) => {
+                        <tr><td colSpan={5} className="pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">{sourceLabels[source]}</td></tr>
+                        {group.map((line: RevenueLineResult) => {
                           const deltaColor = line.delta > 0 ? 'text-green-600' : line.delta < 0 ? 'text-red-600' : 'text-gray-400'
                           return (
                             <tr key={line.key} className="border-b border-gray-50 hover:bg-gray-50/50">
@@ -955,9 +1005,7 @@ export default function DashboardPage() {
                               <td className="py-1.5 text-right text-gray-600 tabular-nums">{line.expected > 0 ? `$${line.expected.toLocaleString()}` : '—'}</td>
                               <td className="py-1.5 text-right text-gray-800 tabular-nums font-medium">{line.actual > 0 ? `$${line.actual.toLocaleString()}` : '—'}</td>
                               <td className={`py-1.5 text-right tabular-nums font-medium ${deltaColor}`}>
-                                {line.expected > 0 || line.actual > 0
-                                  ? `${line.delta >= 0 ? '+' : ''}$${line.delta.toLocaleString()}`
-                                  : '—'}
+                                {line.expected > 0 || line.actual > 0 ? `${line.delta >= 0 ? '+' : ''}$${line.delta.toLocaleString()}` : '—'}
                               </td>
                               <td className="py-1.5 pl-4 text-xs text-gray-400 max-w-[280px] truncate">{line.formula}</td>
                             </tr>
@@ -984,10 +1032,104 @@ export default function DashboardPage() {
             {totalExpected > 0 && totalActual > 0 && Math.abs(totalDelta / totalExpected) > 0.05 && (
               <div className={`mt-3 px-3 py-2 rounded-lg text-xs ${totalDelta < 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
                 {totalDelta < 0
-                  ? `Revenue is $${Math.abs(totalDelta).toLocaleString()} (${Math.abs(Math.round(totalDelta / totalExpected * 100))}%) below expected. Check AAFTE actuals against your enrollment assumptions.`
-                  : `Revenue is $${totalDelta.toLocaleString()} (${Math.round(totalDelta / totalExpected * 100)}%) above expected. Verify this isn't a timing difference from the OSPI apportionment schedule.`}
+                  ? `Revenue is $${Math.abs(totalDelta).toLocaleString()} (${Math.abs(Math.round(totalDelta / totalExpected * 100))}%) below expected.`
+                  : `Revenue is $${totalDelta.toLocaleString()} (${Math.round(totalDelta / totalExpected * 100)}%) above expected.`}
               </div>
             )}
+          </div>
+        )
+      })()}
+
+      {/* ── Staffing Benchmarks ────────────────────────────────────────────── */}
+      {financialData.categories.length > 0 && (() => {
+        const personnelCats = financialData.categories.filter((c) =>
+          c.accountType === 'expense' && /salary|personnel|staff|benefits|payroll/i.test(c.name)
+        )
+        if (personnelCats.length === 0) return null
+
+        const actualPersonnel = personnelCats.reduce((s, c) => s + c.budget, 0)
+        const ftes = schoolProfile.currentFTES || schoolProfile.headcount
+
+        // Compute benchmark totals by category for a school of this size
+        const categories: PositionCategory[] = ['Administrative', 'Certificated', 'Classified']
+        const benchmarkByCategory = categories.map((cat) => {
+          const positions = POSITION_BENCHMARKS.filter((p) => p.category === cat)
+          // Estimate typical FTE and salary for this school size
+          const total = positions.reduce((s, p) => {
+            let fte: number
+            if (p.driverType === 'per_pupil') {
+              // Scale: teachers ~1 per 24 students, paras ~1 per 50, etc.
+              const ratio = cat === 'Certificated' ? 24 : cat === 'Classified' ? 50 : 100
+              fte = Math.max(p.typicalFteMin, Math.min(p.typicalFteMax, ftes / ratio))
+            } else {
+              fte = p.typicalFteMin
+            }
+            return s + (fte * p.benchmarkSalary)
+          }, 0)
+          return { category: cat, benchmark: Math.round(total) }
+        })
+
+        const totalBenchmark = benchmarkByCategory.reduce((s, b) => s + b.benchmark, 0)
+
+        // Map actual categories to admin/cert/classified
+        const classifyActual = (name: string): PositionCategory => {
+          if (/admin|office|hr|development|marketing|registrar|business/i.test(name)) return 'Administrative'
+          if (/teacher|counsel|psycholog|speech|coach|librarian|instruct.*cert/i.test(name)) return 'Certificated'
+          return 'Classified'
+        }
+        const actualByCategory: Record<PositionCategory, number> = { Administrative: 0, Certificated: 0, Classified: 0 }
+        for (const cat of personnelCats) {
+          const cls = classifyActual(cat.name)
+          actualByCategory[cls] += cat.budget
+        }
+        // If all went to Classified (no category name differentiation), show total only
+        const hasGoodMapping = actualByCategory.Administrative > 0 || actualByCategory.Certificated > 0
+
+        return (
+          <div className="card-static p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-base font-semibold text-gray-800" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+                  Staffing Benchmarks
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                  Your personnel spending vs. WA market benchmarks for {ftes} FTES
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              {benchmarkByCategory.map((b) => {
+                const actual = hasGoodMapping ? actualByCategory[b.category] : 0
+                const delta = actual > 0 ? ((actual - b.benchmark) / b.benchmark) * 100 : 0
+                const flagged = Math.abs(delta) > 15 && actual > 0
+                return (
+                  <div key={b.category} className={`rounded-lg border p-4 ${flagged ? (delta > 15 ? 'border-red-200 bg-red-50/50' : 'border-amber-200 bg-amber-50/50') : 'border-gray-200'}`}>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{b.category}</p>
+                    <p className="text-sm text-gray-700">Benchmark: <span className="font-semibold tabular-nums">{fmt(b.benchmark)}</span></p>
+                    {hasGoodMapping && actual > 0 ? (
+                      <>
+                        <p className="text-sm text-gray-700">Actual: <span className="font-semibold tabular-nums">{fmt(actual)}</span></p>
+                        <p className={`text-xs mt-1 font-medium ${delta > 15 ? 'text-red-600' : delta < -15 ? 'text-amber-600' : 'text-green-600'}`}>
+                          {delta > 0 ? '+' : ''}{delta.toFixed(0)}% vs benchmark
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-400 mt-1">Upload detailed personnel categories to compare</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">Total benchmark: <span className="font-semibold">{fmt(totalBenchmark)}</span> · Actual personnel budget: <span className="font-semibold">{fmt(actualPersonnel)}</span></span>
+              {Math.abs(actualPersonnel - totalBenchmark) / totalBenchmark > 0.15 && (
+                <span className={`font-medium ${actualPersonnel > totalBenchmark ? 'text-red-600' : 'text-amber-600'}`}>
+                  {actualPersonnel > totalBenchmark ? 'Above' : 'Below'} benchmark by {Math.abs(Math.round((actualPersonnel - totalBenchmark) / totalBenchmark * 100))}%
+                </span>
+              )}
+            </div>
           </div>
         )
       })()}

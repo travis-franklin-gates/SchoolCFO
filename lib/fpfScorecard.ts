@@ -69,16 +69,29 @@ export function buildFpfScorecard(
   // ── Financial Performance ──
 
   // 1. Current Ratio = current assets / current liabilities
-  // We don't have balance sheet data — mark insufficient
-  metrics.push({
-    key: 'current_ratio',
-    name: 'Current Ratio',
-    category: 'performance',
-    value: null,
-    formatted: 'Insufficient Data',
-    threshold: stage === 1 ? '≥ 1.0' : '≥ 1.1',
-    status: 'insufficient-data',
-  })
+  if (profile.currentAssets > 0 && profile.currentLiabilities > 0) {
+    const ratio = profile.currentAssets / profile.currentLiabilities
+    const threshold = stage === 1 ? 1.0 : 1.1
+    metrics.push({
+      key: 'current_ratio',
+      name: 'Current Ratio',
+      category: 'performance',
+      value: ratio,
+      formatted: fmtRatio(ratio),
+      threshold: stage === 1 ? '≥ 1.0' : '≥ 1.1',
+      status: ratio >= threshold ? 'meets' : 'does-not-meet',
+    })
+  } else {
+    metrics.push({
+      key: 'current_ratio',
+      name: 'Current Ratio',
+      category: 'performance',
+      value: null,
+      formatted: 'Insufficient Data',
+      threshold: stage === 1 ? '≥ 1.0' : '≥ 1.1',
+      status: 'insufficient-data',
+    })
+  }
 
   // 2. Days Cash on Hand = unrestricted cash / (total expenses / 365)
   const totalExpenses = financialData.ytdExpenses
@@ -211,6 +224,17 @@ export function buildFpfScorecard(
       threshold: 'Not evaluated (Stage 1)',
       status: 'not-evaluated',
     })
+  } else if (profile.totalAssets > 0 && profile.totalLiabilities >= 0) {
+    const ratio = profile.totalLiabilities / profile.totalAssets
+    metrics.push({
+      key: 'debt_to_asset',
+      name: 'Debt-to-Asset Ratio',
+      category: 'sustainability',
+      value: ratio,
+      formatted: fmtRatio(ratio),
+      threshold: '≤ 0.9',
+      status: ratio <= 0.9 ? 'meets' : 'does-not-meet',
+    })
   } else {
     metrics.push({
       key: 'debt_to_asset',
@@ -267,6 +291,19 @@ export function buildFpfScorecard(
       formatted: '—',
       threshold: 'Not evaluated (Stage 1)',
       status: 'not-evaluated',
+    })
+  } else if (profile.annualDebtService > 0) {
+    const netIncome = financialData.ytdRevenue - financialData.ytdExpenses
+    const numerator = netIncome + profile.annualDepreciation + profile.interestExpense
+    const dscr = numerator / profile.annualDebtService
+    metrics.push({
+      key: 'dscr',
+      name: 'Debt Service Coverage Ratio',
+      category: 'sustainability',
+      value: dscr,
+      formatted: fmtRatio(dscr),
+      threshold: '≥ 1.1',
+      status: dscr >= 1.1 ? 'meets' : 'does-not-meet',
     })
   } else {
     metrics.push({

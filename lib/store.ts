@@ -34,6 +34,14 @@ export interface SchoolProfile {
   ellPct: number
   hicapPct: number
   iepPct: number
+  // Balance sheet inputs for FPF scorecard
+  currentAssets: number
+  currentLiabilities: number
+  totalAssets: number
+  totalLiabilities: number
+  annualDepreciation: number
+  annualDebtService: number
+  interestExpense: number
 }
 
 /** Format a grade span pair as "K-5" style string */
@@ -518,6 +526,13 @@ export const useStore = create<AppState>((set, get) => ({
     ellPct: 12,
     hicapPct: 5,
     iepPct: 14,
+    currentAssets: 0,
+    currentLiabilities: 0,
+    totalAssets: 0,
+    totalLiabilities: 0,
+    annualDepreciation: 0,
+    annualDebtService: 0,
+    interestExpense: 0,
   },
   financialData: {
     totalBudget: 5150000,
@@ -597,6 +612,13 @@ export const useStore = create<AppState>((set, get) => ({
           ellPct: Number(school.ell_pct) || existing.ellPct,
           hicapPct: Number(school.hicap_pct) || existing.hicapPct,
           iepPct: Number(school.iep_pct) || existing.iepPct,
+          currentAssets: Number(school.current_assets) || existing.currentAssets,
+          currentLiabilities: Number(school.current_liabilities) || existing.currentLiabilities,
+          totalAssets: Number(school.total_assets) || existing.totalAssets,
+          totalLiabilities: Number(school.total_liabilities) || existing.totalLiabilities,
+          annualDepreciation: Number(school.annual_depreciation) || existing.annualDepreciation,
+          annualDebtService: Number(school.annual_debt_service) || existing.annualDebtService,
+          interestExpense: Number(school.interest_expense) || existing.interestExpense,
         },
         auditAgentsLastRun: school.audit_agents_last_run ?? null,
         auditReadinessScore: school.audit_readiness_score ?? null,
@@ -907,6 +929,20 @@ export const useStore = create<AppState>((set, get) => ({
       }
     }
 
+    // 8. Load agent cache to get last run timestamp and check staleness
+    const { data: cacheRows } = await supabase
+      .from('agent_cache')
+      .select('agent_name, data_hash, cached_at')
+      .eq('school_id', schoolId)
+      .order('cached_at', { ascending: false })
+      .limit(1)
+    if (cacheRows && cacheRows.length > 0) {
+      const latestCacheTime = cacheRows[0].cached_at
+      if (!get().lastAgentRunAt) {
+        set({ lastAgentRunAt: latestCacheTime })
+      }
+    }
+
     // Compare current data hash with stored hash to detect cache staleness
     const finalState = get()
     if (finalState.financialData.categories.length > 0) {
@@ -949,6 +985,13 @@ export const useStore = create<AppState>((set, get) => ({
             ell_pct: updated.ellPct ?? 0,
             hicap_pct: updated.hicapPct ?? 0,
             iep_pct: updated.iepPct ?? 0,
+            current_assets: updated.currentAssets ?? 0,
+            current_liabilities: updated.currentLiabilities ?? 0,
+            total_assets: updated.totalAssets ?? 0,
+            total_liabilities: updated.totalLiabilities ?? 0,
+            annual_depreciation: updated.annualDepreciation ?? 0,
+            annual_debt_service: updated.annualDebtService ?? 0,
+            interest_expense: updated.interestExpense ?? 0,
           })
           .eq('id', schoolId)
         if (error) console.error('[store] updateSchoolProfile', error)
@@ -1755,6 +1798,13 @@ export const useStore = create<AppState>((set, get) => ({
       ellPct: 0,
       hicapPct: 0,
       iepPct: 0,
+      currentAssets: 0,
+      currentLiabilities: 0,
+      totalAssets: 0,
+      totalLiabilities: 0,
+      annualDepreciation: 0,
+      annualDebtService: 0,
+      interestExpense: 0,
     },
     financialData: {
       totalBudget: 0,

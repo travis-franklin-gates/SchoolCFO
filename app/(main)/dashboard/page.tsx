@@ -25,9 +25,10 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import Link from 'next/link'
-import { useStore } from '@/lib/store'
+import { useStore, type AgentFinding } from '@/lib/store'
 import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
 import { buildRevenueModel, type RevenueSource } from '@/lib/revenueModel'
+import { computeDataHash } from '@/lib/agentCache'
 
 function fmt(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
@@ -79,17 +80,101 @@ export default function DashboardPage() {
     agentFindings,
     lastAgentRunAt,
     financialAssumptions,
+    agentDataHash,
+    agentCacheStale,
+    grants,
+    schoolId,
   } = useStore()
 
   const [briefing, setBriefing] = useState('')
   const [briefingLoading, setBriefingLoading] = useState(false)
   const [briefingError, setBriefingError] = useState(false)
   const [briefingExpanded, setBriefingExpanded] = useState(false)
+  const [reanalyzing, setReanalyzing] = useState(false)
   const fetchedForRef = useRef<string | null>(null)
 
   const activeSnap = monthlySnapshots[activeMonth]
   const snapshotCount = Object.keys(monthlySnapshots).length
   const cacheKey = `${activeMonth}:${activeSnap?.uploadedAt ?? ''}`
+
+  // Determine if agent cache is stale (data changed since last run)
+  const currentHash = financialData.categories.length > 0
+    ? computeDataHash(schoolProfile, financialData, grants)
+    : null
+  const cacheIsStale = agentCacheStale || (currentHash != null && agentDataHash != null && currentHash !== agentDataHash)
+  const hasNeverRun = !lastAgentRunAt && financialData.categories.length > 0
+
+  const handleReanalyze = async () => {
+    if (!schoolId || reanalyzing) return
+    setReanalyzing(true)
+
+    const fd = financialData
+    const pacePercent = Math.round(paceFromKey(activeMonth) * 100)
+    const state = useStore.getState()
+
+    const agentCalls = [
+      fetch('/api/agents/budget-analyst', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schoolId, activeMonth, pacePercent, categories: fd.categories, totalBudget: fd.totalBudget, ytdSpending: fd.ytdExpenses, financialAssumptions: state.financialAssumptions }),
+      }),
+      fetch('/api/agents/cash-sentinel', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schoolId, activeMonth, cashOnHand: fd.cashOnHand, daysOfReserves: fd.daysOfReserves, totalBudget: fd.totalBudget, ytdSpending: fd.ytdExpenses, snapshotCount, categories: fd.categories.map((c) => ({ name: c.name, budget: c.budget, ytdActuals: c.ytdActuals, accountType: c.accountType })), financialAssumptions: state.financialAssumptions }),
+      }),
+      fetch('/api/agents/grants-officer', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schoolId, activeMonth, pacePercent, grants: state.grants, otherGrants: state.otherGrants }),
+      }),
+      fetch('/api/agents/audit-compliance', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schoolId, activeMonth }),
+      }),
+      fetch('/api/agents/audit-federal', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schoolId, activeMonth, grants: state.grants, totalBudget: fd.totalBudget, ytdSpending: fd.ytdExpenses }),
+      }),
+    ]
+
+    try {
+      await Promise.allSettled(agentCalls)
+      const now = new Date().toISOString()
+      const s = useStore.getState()
+      s.setLastAgentRunAt(now)
+      s.setAuditMeta({ lastRun: now })
+      const hash = computeDataHash(s.schoolProfile, s.financialData, s.grants)
+      s.setAgentDataHash(hash)
+
+      // Reload findings from DB
+      const { supabase } = await import('@/lib/supabase')
+      const { data: rows } = await supabase
+        .from('agent_findings')
+        .select('*')
+        .eq('school_id', schoolId)
+        .order('created_at', { ascending: false })
+      if (rows) {
+        s.setAgentFindings(rows.map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          agentName: r.agent_name as AgentFinding['agentName'],
+          findingType: r.finding_type as AgentFinding['findingType'],
+          severity: r.severity as AgentFinding['severity'],
+          title: r.title as string,
+          summary: r.summary as string,
+          detail: (r.detail as Record<string, unknown>) ?? {},
+          expiresAt: (r.expires_at as string) ?? null,
+          createdAt: r.created_at as string,
+        })))
+      }
+
+      // Clear briefing cache so it regenerates with new findings
+      sessionStorage.removeItem(`briefing:${cacheKey}`)
+      setBriefing('')
+      fetchedForRef.current = null
+    } catch (err) {
+      console.error('[re-analyze]', err)
+    } finally {
+      setReanalyzing(false)
+    }
+  }
 
   useEffect(() => {
     if (Object.keys(monthlySnapshots).length === 0) return
@@ -783,12 +868,12 @@ export default function DashboardPage() {
       })()}
 
       {/* ── Agent Insights ────────────────────────────────────────────────── */}
-      {agentFindings.length > 0 && (() => {
+      {(agentFindings.length > 0 || cacheIsStale || hasNeverRun) && (() => {
         // When fiscal year is complete, filter out cash_sentinel forward-looking findings
         const displayFindings = isFiscalYearComplete
           ? agentFindings.filter((f) => f.agentName !== 'cash_sentinel')
           : agentFindings
-        if (displayFindings.length === 0) return null
+        if (displayFindings.length === 0 && !cacheIsStale && !hasNeverRun) return null
         return (
         <div className="card-static p-5">
           <div className="flex items-center justify-between mb-4">
@@ -797,16 +882,46 @@ export default function DashboardPage() {
               <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
                 AI Agent Insights
               </h2>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                {displayFindings.length}
-              </span>
+              {displayFindings.length > 0 && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                  {displayFindings.length}
+                </span>
+              )}
             </div>
-            {lastAgentRunAt && (
-              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                Last run: {new Date(lastAgentRunAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-              </span>
-            )}
+            <div className="flex items-center gap-3">
+              {lastAgentRunAt && (
+                <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  Last analyzed: {new Date(lastAgentRunAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                </span>
+              )}
+              {(cacheIsStale || hasNeverRun) && (
+                <button
+                  onClick={handleReanalyze}
+                  disabled={reanalyzing}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)' }}
+                >
+                  {reanalyzing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
+                      Analyzing...
+                    </>
+                  ) : hasNeverRun ? (
+                    'Run Analysis'
+                  ) : (
+                    'New data — re-analyze'
+                  )}
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Stale cache banner */}
+          {cacheIsStale && displayFindings.length > 0 && !reanalyzing && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800 mb-3">
+              Financial data has changed since the last analysis. Results below may be outdated.
+            </div>
+          )}
           <div className="space-y-2.5">
             {displayFindings.slice(0, 6).map((finding) => {
               const severityCfg = {

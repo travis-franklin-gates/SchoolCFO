@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { getFiscalMonths, currentMonthKey, paceFromKey, labelFromKey } from '@/lib/fiscalYear'
+import { computeDataHash } from '@/lib/agentCache'
 import {
   autoMapColumns,
   applyMappings,
@@ -356,8 +357,13 @@ export default function UploadPage() {
 
     Promise.all(settled).then(() => {
       const now = new Date().toISOString()
-      useStore.getState().setLastAgentRunAt(now)
-      useStore.getState().setAuditMeta({ lastRun: now })
+      const s = useStore.getState()
+      s.setLastAgentRunAt(now)
+      s.setAuditMeta({ lastRun: now })
+
+      // Store data hash so future loads can detect cache staleness
+      const hash = computeDataHash(s.schoolProfile, s.financialData, s.grants)
+      s.setAgentDataHash(hash)
 
       // Trigger email notifications for concern/action findings
       if (schoolId) {

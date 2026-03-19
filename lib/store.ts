@@ -7,6 +7,7 @@ import {
   calculateCashPosition,
 } from './fiscalYear'
 import { type FinancialAssumptions, DEFAULT_FINANCIAL_ASSUMPTIONS, mergeAssumptions } from './financialAssumptions'
+import { computeDataHash } from './agentCache'
 
 export type AlertSeverity = 'info' | 'warning' | 'critical'
 export type GrantStatus = 'on-pace' | 'watch' | 'underspend-risk'
@@ -250,6 +251,8 @@ interface AppState {
   auditReadinessScore: number | null
   auditReadinessGrade: string | null
   financialAssumptions: FinancialAssumptions
+  agentDataHash: string | null       // hash of data when agents last ran
+  agentCacheStale: boolean           // true when data changed since last agent run
 
   // ── Actions ──
   setSchoolContext: (userId: string, schoolId: string) => void
@@ -282,6 +285,7 @@ interface AppState {
   markAuditReviewed: (category: string) => void
   deleteSnapshot: (monthKey: string) => void
   setAgentFindings: (findings: AgentFinding[]) => void
+  setAgentDataHash: (hash: string) => void
   setLastAgentRunAt: (ts: string) => void
   setAuditMeta: (meta: { lastRun: string; score?: number; grade?: string }) => void
   updateFinancialAssumptions: (assumptions: Partial<FinancialAssumptions>) => void
@@ -543,6 +547,8 @@ export const useStore = create<AppState>((set, get) => ({
   auditReadinessScore: null,
   auditReadinessGrade: null,
   financialAssumptions: { ...DEFAULT_FINANCIAL_ASSUMPTIONS },
+  agentDataHash: null,
+  agentCacheStale: false,
 
   // ── Auth actions ──
 
@@ -596,6 +602,7 @@ export const useStore = create<AppState>((set, get) => ({
         auditReadinessScore: school.audit_readiness_score ?? null,
         auditReadinessGrade: school.audit_readiness_grade ?? null,
         financialAssumptions: mergeAssumptions(school.financial_assumptions as Partial<FinancialAssumptions> | null),
+        agentDataHash: (school.agent_data_hash as string) ?? null,
       })
     }
 
@@ -897,6 +904,16 @@ export const useStore = create<AppState>((set, get) => ({
       const { error: seedErr } = await supabase.from('grants').insert(seedRows)
       if (seedErr) {
         console.error('[store] seed grants insert failed:', seedErr.message, seedErr.code, seedErr.details, seedErr.hint)
+      }
+    }
+
+    // Compare current data hash with stored hash to detect cache staleness
+    const finalState = get()
+    if (finalState.financialData.categories.length > 0) {
+      const currentHash = computeDataHash(finalState.schoolProfile, finalState.financialData, finalState.grants)
+      const storedHash = finalState.agentDataHash
+      if (storedHash && storedHash !== currentHash) {
+        set({ agentCacheStale: true })
       }
     }
 
@@ -1419,6 +1436,7 @@ export const useStore = create<AppState>((set, get) => ({
         grantAwards: newAwards,
         grants: mergeGrantsWithSnapshot(newAwards, snapshotGrants, newCategories),
         alerts: newAlerts,
+        agentCacheStale: true,
       }
     })
 
@@ -1685,6 +1703,16 @@ export const useStore = create<AppState>((set, get) => ({
 
   setAgentFindings: (findings) => set({ agentFindings: findings }),
   setLastAgentRunAt: (ts) => set({ lastAgentRunAt: ts }),
+  setAgentDataHash: (hash) => {
+    set({ agentDataHash: hash, agentCacheStale: false })
+    const { schoolId } = get()
+    if (schoolId) {
+      writeThrough(async (supabase) => {
+        const { error } = await supabase.from('schools').update({ agent_data_hash: hash }).eq('id', schoolId)
+        if (error) console.error('[store] setAgentDataHash', error)
+      })
+    }
+  },
 
   setAuditMeta: (meta) => {
     set({
@@ -1756,5 +1784,7 @@ export const useStore = create<AppState>((set, get) => ({
     auditReadinessScore: null,
     auditReadinessGrade: null,
     financialAssumptions: { ...DEFAULT_FINANCIAL_ASSUMPTIONS },
+    agentDataHash: null,
+    agentCacheStale: false,
   }),
 }))

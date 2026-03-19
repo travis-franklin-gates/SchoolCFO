@@ -65,14 +65,6 @@ const STEP_META = [
   { label: 'Operations', icon: Calculator },
 ] as const
 
-const AUTHORIZER_OPTIONS = [
-  'Washington State Charter School Commission',
-  'Seattle School District',
-  'Spokane Public Schools',
-  'Tacoma Public Schools',
-  'Other',
-]
-
 const WA_REGIONS = [
   'King County',
   'Pierce County',
@@ -84,10 +76,28 @@ const WA_REGIONS = [
   'Other',
 ]
 
-const OPERATING_YEAR_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
-  value: i + 1,
-  label: `Year ${i + 1}${i < 2 ? ' (FPF Stage 1)' : ' (FPF Stage 2)'}`,
-}))
+// Generate school year options from 2020-2021 through current year
+const CURRENT_CALENDAR_YEAR = new Date().getFullYear()
+// WA school year: if we're before September, current school year started last calendar year
+const CURRENT_SCHOOL_YEAR_START = new Date().getMonth() >= 8 ? CURRENT_CALENDAR_YEAR : CURRENT_CALENDAR_YEAR - 1
+const OPENING_YEAR_OPTIONS = Array.from(
+  { length: CURRENT_SCHOOL_YEAR_START - 2020 + 1 },
+  (_, i) => {
+    const startYear = 2020 + i
+    return {
+      value: `${startYear}-${startYear + 1}`,
+      label: `${startYear}-${startYear + 1} School Year`,
+    }
+  },
+)
+
+/** Calculate operating year number from opening year string like "2023-2024" */
+function calcOperatingYear(openingYear: string): number {
+  const startYear = parseInt(openingYear.split('-')[0], 10)
+  if (isNaN(startYear)) return 1
+  const yearsOperating = CURRENT_SCHOOL_YEAR_START - startYear + 1
+  return Math.max(1, yearsOperating)
+}
 
 const BENEFITS_RATE = 0.30
 
@@ -309,10 +319,9 @@ export default function OnboardingPage() {
   // ── Step 0: School Identity ──
   const [name, setName] = useState('')
   const [region, setRegion] = useState('King County')
-  const [authorizer, setAuthorizer] = useState('Washington State Charter School Commission')
   const [foundingGrades, setFoundingGrades] = useState<string[]>([])
   const [buildoutGrades, setBuildoutGrades] = useState<string[]>([])
-  const [operatingYear, setOperatingYear] = useState(1)
+  const [openingYear, setOpeningYear] = useState(OPENING_YEAR_OPTIONS[OPENING_YEAR_OPTIONS.length - 1]?.value || `${CURRENT_SCHOOL_YEAR_START}-${CURRENT_SCHOOL_YEAR_START + 1}`)
 
   // ── Step 1: Enrollment & Demographics ──
   const [headcount, setHeadcount] = useState('')
@@ -401,7 +410,7 @@ export default function OnboardingPage() {
         const { data: school } = await supabase
           .from('schools')
           .select(
-            'id, name, authorizer, grades_current_first, grades_current_last, grades_buildout_first, grades_buildout_last, current_ftes, prior_year_ftes, headcount, operating_year, onboarding_completed, financial_assumptions, frl_pct, iep_pct, ell_pct, hicap_pct, sped_pct',
+            'id, name, region, grades_current_first, grades_current_last, grades_buildout_first, grades_buildout_last, current_ftes, prior_year_ftes, headcount, opening_year, operating_year, onboarding_completed, financial_assumptions, frl_pct, iep_pct, ell_pct, hicap_pct, sped_pct',
           )
           .eq('user_id', user.id)
           .single()
@@ -414,11 +423,11 @@ export default function OnboardingPage() {
         if (school) {
           setSchoolId(school.id)
           if (school.name) setName(school.name)
-          if (school.authorizer) setAuthorizer(school.authorizer)
+          if (school.region) setRegion(school.region)
           if (school.headcount) setHeadcount(String(school.headcount))
           if (school.current_ftes) setCurrentFtes(String(school.current_ftes))
           if (school.prior_year_ftes) setPriorYearFtes(String(school.prior_year_ftes))
-          if (school.operating_year) setOperatingYear(school.operating_year)
+          if (school.opening_year) setOpeningYear(school.opening_year)
           if (school.frl_pct != null) setFrlPct(school.frl_pct)
           if (school.iep_pct != null) setIepPct(school.iep_pct)
           if (school.ell_pct != null) setEllPct(school.ell_pct)
@@ -507,12 +516,14 @@ export default function OnboardingPage() {
         const payload = {
           user_id: user.id,
           name: name.trim(),
-          authorizer,
+          authorizer: 'Washington State Charter School Commission',
+          region,
           grades_current_first: sortedFounding[0] || null,
           grades_current_last: sortedFounding[sortedFounding.length - 1] || null,
           grades_buildout_first: sortedBuildout[0] || null,
           grades_buildout_last: sortedBuildout[sortedBuildout.length - 1] || null,
-          operating_year: operatingYear,
+          opening_year: openingYear,
+          operating_year: calcOperatingYear(openingYear),
         }
 
         const { data: upserted, error: upsertErr } = await supabase
@@ -560,7 +571,7 @@ export default function OnboardingPage() {
 
     setSaving(false)
     return true
-  }, [name, authorizer, foundingGrades, buildoutGrades, operatingYear, schoolId, headcount, currentFtes, priorYearFtes, frlPct, iepPct, ellPct, hicapPct, assumptions, aaftePct])
+  }, [name, region, foundingGrades, buildoutGrades, openingYear, schoolId, headcount, currentFtes, priorYearFtes, frlPct, iepPct, ellPct, hicapPct, assumptions, aaftePct])
 
   const goNext = async () => {
     if (!canGoNext()) return
@@ -784,7 +795,7 @@ export default function OnboardingPage() {
     if (hc === 0) return 0
     const profile: SchoolProfile = {
       name,
-      authorizer,
+      authorizer: 'Washington State Charter School Commission',
       gradesCurrentFirst: foundingGrades[0] || 'K',
       gradesCurrentLast: foundingGrades[foundingGrades.length - 1] || '5',
       gradesBuildoutFirst: buildoutGrades[0] || 'K',
@@ -794,7 +805,7 @@ export default function OnboardingPage() {
       nextBoardMeeting: '',
       nextFinanceCommittee: '',
       openingCashBalance: 0,
-      operatingYear,
+      operatingYear: calcOperatingYear(openingYear),
       headcount: hc,
       spedPct: iepPct,
       frlPct,
@@ -1099,7 +1110,7 @@ export default function OnboardingPage() {
                 />
               </div>
 
-              {/* Region + Authorizer */}
+              {/* Region + Opening Year */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1.5 text-gray-700">WA Region</label>
@@ -1110,12 +1121,15 @@ export default function OnboardingPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1.5 text-gray-700">Authorizer</label>
-                  <select value={authorizer} onChange={(e) => setAuthorizer(e.target.value)} className={inputCls}>
-                    {AUTHORIZER_OPTIONS.map((a) => (
-                      <option key={a} value={a}>{a}</option>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700">School Opened</label>
+                  <select value={openingYear} onChange={(e) => setOpeningYear(e.target.value)} className={inputCls}>
+                    {OPENING_YEAR_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Year {calcOperatingYear(openingYear)} of operation — FPF Stage {calcOperatingYear(openingYear) <= 2 ? '1' : '2'}
+                  </p>
                 </div>
               </div>
 
@@ -1173,14 +1187,10 @@ export default function OnboardingPage() {
                 </div>
               </div>
 
-              {/* Operating Year */}
-              <div>
-                <label className="block text-sm font-medium mb-1.5 text-gray-700">Operating Year</label>
-                <select value={operatingYear} onChange={(e) => setOperatingYear(Number(e.target.value))} className={inputCls}>
-                  {OPERATING_YEAR_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
+              {/* Authorizer — hardcoded, shown as info */}
+              <div className="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-600">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Authorizer</span>
+                <p className="mt-0.5">Washington State Charter School Commission</p>
               </div>
 
               {/* Dynamic summary */}

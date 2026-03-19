@@ -3,6 +3,7 @@ import { fiscalIndexFromKey } from '@/lib/fiscalYear'
 import { CLAUDE_MODEL } from '@/lib/constants'
 import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
 import { type FinancialAssumptions, mergeAssumptions } from '@/lib/financialAssumptions'
+import { formatBenchmarksForPrompt } from '@/lib/positionBenchmarks'
 import { buildRevenueModel, formatRevenueModelForPrompt } from '@/lib/revenueModel'
 import type { SchoolProfile, BudgetCategory, FinancialSnapshot } from '@/lib/store'
 import { buildFpfScorecard, formatFpfForPrompt } from '@/lib/fpfScorecard'
@@ -193,6 +194,8 @@ SCHOOL-CONFIGURED FINANCIAL ASSUMPTIONS (use these thresholds when analyzing —
 - AAFTE projection: ${assumptions.aafte_pct}% of headcount | Authorizer fee: ${assumptions.authorizer_fee_pct}% of state revenue
 - Cash reserves — Healthy: ≥${assumptions.cash_healthy_days} days | Watch: <${assumptions.cash_watch_days} days | Concern: <${assumptions.cash_concern_days} days | Crisis: <${assumptions.cash_crisis_days} days
 - Interest rate on reserves: ${assumptions.interest_rate_pct}%
+
+${formatBenchmarksForPrompt()}
 
 CURRENT SCHOOL:
 School: ${sp.name}

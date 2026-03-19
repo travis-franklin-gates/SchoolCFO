@@ -23,9 +23,11 @@ import {
   ChevronRight,
   Bot,
   CheckCircle2,
+  Download,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useStore, type AgentFinding } from '@/lib/store'
+import { generateCommissionExport } from '@/lib/commissionExport'
 import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
 import { buildRevenueModel, type RevenueSource } from '@/lib/revenueModel'
 import { computeDataHash } from '@/lib/agentCache'
@@ -92,6 +94,7 @@ export default function DashboardPage() {
   const [briefingExpanded, setBriefingExpanded] = useState(false)
   const [briefingAutoExpanded, setBriefingAutoExpanded] = useState(false)
   const [reanalyzing, setReanalyzing] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const fetchedForRef = useRef<string | null>(null)
 
   const activeSnap = monthlySnapshots[activeMonth]
@@ -175,6 +178,26 @@ export default function DashboardPage() {
       console.error('[re-analyze]', err)
     } finally {
       setReanalyzing(false)
+    }
+  }
+
+  const handleExportExcel = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const state = useStore.getState()
+      await generateCommissionExport(
+        state.schoolProfile,
+        state.financialData,
+        state.grants,
+        state.financialAssumptions,
+        state.activeMonth,
+        state.monthlySnapshots,
+      )
+    } catch (err) {
+      console.error('[excel-export]', err)
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -1057,7 +1080,7 @@ export default function DashboardPage() {
       })()}
 
       {/* ── Quick Actions ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <Link
           href="/board-packet"
           className="flex items-center justify-center gap-2 text-white px-4 py-3 text-sm font-semibold hover:opacity-90 transition-opacity"
@@ -1069,8 +1092,26 @@ export default function DashboardPage() {
           }}
         >
           <FileText size={16} />
-          Generate Board Packet
+          Board Packet
         </Link>
+        <button
+          onClick={handleExportExcel}
+          disabled={exporting || financialData.categories.length === 0}
+          className="flex items-center justify-center gap-2 text-white px-4 py-3 text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+          style={{
+            background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)',
+            borderRadius: 'var(--radius-md)',
+            fontFamily: 'var(--font-display), system-ui, sans-serif',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          {exporting ? (
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+          ) : (
+            <Download size={16} />
+          )}
+          {exporting ? 'Exporting...' : 'Export Excel'}
+        </button>
         <Link
           href="/ask-cfo"
           className="card-static flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold hover:shadow-md transition-shadow"
@@ -1085,7 +1126,7 @@ export default function DashboardPage() {
           style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
         >
           <Upload size={16} />
-          Upload New Data
+          Upload Data
         </Link>
       </div>
 

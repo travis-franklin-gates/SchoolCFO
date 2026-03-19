@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   ShieldCheck,
+  TrendingUp,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/budget-analysis', icon: BarChart2, label: 'Budget Analysis' },
   { href: '/grant-tracker', icon: Award, label: 'Grant Tracker' },
   { href: '/board-packet', icon: FileText, label: 'Board Packet' },
+  { href: '/projections', icon: TrendingUp, label: 'Projections' },
   { href: '/fpf-scorecard', icon: ShieldCheck, label: 'FPF Scorecard' },
   { href: '/audit-prep', icon: ClipboardCheck, label: 'Audit Prep' },
   { href: '/ask-cfo', icon: MessageCircle, label: 'Ask Your CFO' },

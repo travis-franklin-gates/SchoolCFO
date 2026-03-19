@@ -1,32 +1,35 @@
 'use client'
 
-import { useState, useRef, useEffect, DragEvent } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft,
-  ArrowRight,
-  UploadCloud,
-  CheckCircle,
-  Download,
   School,
   Users,
-  CalendarDays,
-  FileSpreadsheet,
-  Settings2,
+  PieChart,
+  UserPlus,
+  Calculator,
+  CheckCircle,
+  UploadCloud,
+  X,
+  Plus,
+  Lock,
+  ArrowRight,
+  ArrowLeft,
+  BarChart3,
+  MessageSquare,
+  Clipboard,
 } from 'lucide-react'
-import Papa from 'papaparse'
-import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
+import { currentMonthKey } from '@/lib/fiscalYear'
 import {
-  autoMapColumns,
-  applyMappings,
-  extractGrants,
-  isFullyMapped,
-  type ColumnMappingResult,
-  type MappedCategory,
-  type MappedGrant,
-} from '@/lib/uploadPipeline'
-import { currentMonthKey, fiscalIndexFromKey } from '@/lib/fiscalYear'
+  POSITION_BENCHMARKS,
+  type PositionCategory,
+} from '@/lib/positionBenchmarks'
+import {
+  DEFAULT_FINANCIAL_ASSUMPTIONS,
+  mergeAssumptions,
+  type FinancialAssumptions,
+} from '@/lib/financialAssumptions'
 import {
   parseSchoolLaunchProfile,
   parseBudgetCSV,
@@ -35,23 +38,31 @@ import {
   type ImportedBudgetLine,
   type ImportedSchoolProfile,
 } from '@/lib/schoollaunchImport'
-import {
-  DEFAULT_FINANCIAL_ASSUMPTIONS,
-  mergeAssumptions,
-  type FinancialAssumptions,
-} from '@/lib/financialAssumptions'
 import { buildRevenueModel } from '@/lib/revenueModel'
 import type { SchoolProfile } from '@/lib/store'
-import GradeSpanSelector from '@/components/GradeSpanSelector'
 
-// ── Constants ───────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
 
-const STEPS = [
-  { label: 'School Identity', icon: School },
+interface StaffRow {
+  id: string
+  title: string
+  category: PositionCategory
+  fte: number
+  salary: number
+}
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const TEAL = '#2ec4b6'
+
+const ALL_GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
+
+const STEP_META = [
+  { label: 'Identity', icon: School },
   { label: 'Enrollment', icon: Users },
-  { label: 'Dates & Cash', icon: CalendarDays },
-  { label: 'First Upload', icon: FileSpreadsheet },
-  { label: 'Assumptions', icon: Settings2 },
+  { label: 'Demographics', icon: PieChart },
+  { label: 'Staffing', icon: UserPlus },
+  { label: 'Operations', icon: Calculator },
 ] as const
 
 const AUTHORIZER_OPTIONS = [
@@ -62,106 +73,219 @@ const AUTHORIZER_OPTIONS = [
   'Other',
 ]
 
-const OPERATING_YEAR_OPTIONS = [
-  { value: 1, label: 'Year 1 (Stage 1)' },
-  { value: 2, label: 'Year 2 (Stage 1)' },
-  { value: 3, label: 'Year 3 (Stage 2)' },
-  { value: 4, label: 'Year 4 (Stage 2)' },
-  { value: 5, label: 'Year 5 (Stage 2)' },
-  { value: 6, label: 'Year 6 (Stage 2)' },
-  { value: 7, label: 'Year 7 (Stage 2)' },
-  { value: 8, label: 'Year 8 (Stage 2)' },
-  { value: 9, label: 'Year 9 (Stage 2)' },
-  { value: 10, label: 'Year 10+ (Stage 2)' },
+const WA_REGIONS = [
+  'King County',
+  'Pierce County',
+  'Spokane County',
+  'Clark County',
+  'Snohomish County',
+  'Thurston County',
+  'Yakima County',
+  'Other',
 ]
 
-const inputCls =
-  'w-full px-3.5 py-2.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/12 focus:border-[#1e3a5f]'
+const OPERATING_YEAR_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
+  value: i + 1,
+  label: `Year ${i + 1}${i < 2 ? ' (FPF Stage 1)' : ' (FPF Stage 2)'}`,
+}))
 
-const inputStyle: React.CSSProperties = {}
+const BENEFITS_RATE = 0.30
+
+const inputCls =
+  'w-full px-3.5 py-2.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2ec4b6]/20 focus:border-[#2ec4b6]'
 
 const HEADING_FONT: React.CSSProperties = {
   fontFamily: 'var(--font-display), system-ui, sans-serif',
   fontWeight: 700,
 }
 
-const PRIMARY_BTN: React.CSSProperties = {
-  background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)',
-  fontFamily: 'var(--font-display), system-ui, sans-serif',
-}
-
-// ── Assumption field metadata ───────────────────────────────────────────────
-
-interface AssumptionField {
-  key: keyof FinancialAssumptions
-  label: string
-  suffix?: string
-  prefix?: string
-  step?: number
-}
-
-const ASSUMPTION_GROUPS: { title: string; fields: AssumptionField[] }[] = [
-  {
-    title: 'Personnel',
-    fields: [
-      { key: 'benefits_load_pct', label: 'Benefits load (SEBB)', suffix: '%' },
-      { key: 'fica_rate_pct', label: 'Employer FICA rate', suffix: '%', step: 0.01 },
-      { key: 'personnel_healthy_min_pct', label: 'Healthy range (min)', suffix: '%' },
-      { key: 'personnel_healthy_max_pct', label: 'Healthy range (max)', suffix: '%' },
-      { key: 'personnel_concern_pct', label: 'Concern threshold', suffix: '%' },
-    ],
-  },
-  {
-    title: 'Revenue',
-    fields: [
-      { key: 'salary_escalator_pct', label: 'Salary step increase', suffix: '%', step: 0.1 },
-      { key: 'cola_rate_pct', label: 'COLA adjustment', suffix: '%', step: 0.1 },
-      { key: 'operations_escalator_pct', label: 'Ops cost increase', suffix: '%', step: 0.1 },
-      { key: 'aafte_pct', label: 'AAFTE % of headcount', suffix: '%' },
-      { key: 'authorizer_fee_pct', label: 'Authorizer fee', suffix: '%', step: 0.1 },
-      { key: 'regular_ed_per_pupil', label: 'Regular Ed per-pupil', prefix: '$' },
-      { key: 'sped_per_pupil', label: 'SPED per-pupil', prefix: '$' },
-      { key: 'facilities_per_pupil', label: 'Facilities per-pupil', prefix: '$' },
-      { key: 'levy_equity_per_pupil', label: 'Levy Equity per-pupil', prefix: '$' },
-      { key: 'title_i_per_pupil', label: 'Title I per-pupil', prefix: '$' },
-      { key: 'idea_per_pupil', label: 'IDEA per-pupil', prefix: '$' },
-      { key: 'lap_per_pupil', label: 'LAP per-pupil', prefix: '$' },
-      { key: 'tbip_per_pupil', label: 'TBIP per-pupil', prefix: '$' },
-      { key: 'hicap_per_pupil', label: 'HiCap per-pupil', prefix: '$' },
-    ],
-  },
-  {
-    title: 'Cash Flow',
-    fields: [
-      { key: 'cash_healthy_days', label: 'Healthy reserves', suffix: ' days' },
-      { key: 'cash_watch_days', label: 'Watch threshold', suffix: ' days' },
-      { key: 'cash_concern_days', label: 'Concern threshold', suffix: ' days' },
-      { key: 'cash_crisis_days', label: 'Crisis threshold', suffix: ' days' },
-    ],
-  },
-  {
-    title: 'Operations',
-    fields: [
-      { key: 'interest_rate_pct', label: 'Interest rate on reserves', suffix: '%', step: 0.1 },
-    ],
-  },
-]
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDollars(n: number): string {
-  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  return '$' + Math.round(n).toLocaleString('en-US', { maximumFractionDigits: 0 })
 }
 
-function getCurrentFiscalMonth(): string {
-  const now = new Date()
-  const m = now.getMonth() + 1 // 1-indexed
-  const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-  const idx = fiscalIndexFromKey(currentMonthKey())
-  return `${monthNames[m]} (Month ${idx} of 12)`
+function gradeIndex(g: string): number {
+  if (g === 'PK') return -1
+  if (g === 'K') return 0
+  return parseInt(g, 10)
 }
 
-// ── Component ───────────────────────────────────────────────────────────────
+function gradesInRange(first: string, last: string): string[] {
+  const f = gradeIndex(first)
+  const l = gradeIndex(last)
+  return ALL_GRADES.filter((g) => gradeIndex(g) >= f && gradeIndex(g) <= l)
+}
+
+function hasElementary(grades: string[]): boolean {
+  return grades.some((g) => gradeIndex(g) >= 0 && gradeIndex(g) <= 5)
+}
+
+function hasMiddle(grades: string[]): boolean {
+  return grades.some((g) => gradeIndex(g) >= 6 && gradeIndex(g) <= 8)
+}
+
+function hasHigh(grades: string[]): boolean {
+  return grades.some((g) => gradeIndex(g) >= 9 && gradeIndex(g) <= 12)
+}
+
+function generateStaffingDefaults(headcount: number, foundingGrades: string[]): StaffRow[] {
+  const rows: StaffRow[] = []
+  let nextId = 1
+
+  for (const pb of POSITION_BENCHMARKS) {
+    let fte = 0
+
+    if (pb.driverType === 'fixed') {
+      fte = pb.typicalFteMin
+    } else {
+      // per_pupil logic
+      switch (pb.id) {
+        case 'teacher_k5':
+          if (hasElementary(foundingGrades)) {
+            const elemCount = Math.round(headcount * (foundingGrades.filter((g) => gradeIndex(g) >= 0 && gradeIndex(g) <= 5).length / foundingGrades.length))
+            fte = Math.max(1, Math.round((elemCount / 24) * 10) / 10)
+          }
+          break
+        case 'teacher_68':
+          if (hasMiddle(foundingGrades)) {
+            const midCount = Math.round(headcount * (foundingGrades.filter((g) => gradeIndex(g) >= 6 && gradeIndex(g) <= 8).length / foundingGrades.length))
+            fte = Math.max(1, Math.round((midCount / 25) * 10) / 10)
+          }
+          break
+        case 'teacher_912':
+          if (hasHigh(foundingGrades)) {
+            const hiCount = Math.round(headcount * (foundingGrades.filter((g) => gradeIndex(g) >= 9 && gradeIndex(g) <= 12).length / foundingGrades.length))
+            fte = Math.max(1, Math.round((hiCount / 25) * 10) / 10)
+          }
+          break
+        case 'sped_teacher':
+          fte = Math.max(0.5, Math.round((headcount * 0.14 / 14) * 10) / 10)
+          break
+        case 'ell_teacher':
+          fte = Math.max(0.5, Math.round((headcount * 0.12 / 30) * 10) / 10)
+          break
+        case 'counselor':
+          fte = Math.max(0.5, Math.round((headcount / 250) * 10) / 10)
+          break
+        case 'psychologist':
+          fte = Math.max(0.2, Math.round((headcount * 0.14 / 60) * 10) / 10)
+          break
+        case 'slp':
+          fte = Math.round((headcount * 0.05 / 40) * 10) / 10
+          break
+        case 'para_instructional':
+          fte = Math.max(0.5, Math.round((headcount / 50) * 10) / 10)
+          break
+        case 'para_sped':
+          fte = Math.max(0.5, Math.round((headcount * 0.14 / 10) * 10) / 10)
+          break
+        case 'food_service':
+          fte = headcount >= 100 ? Math.max(0.5, Math.round((headcount / 200) * 10) / 10) : 0
+          break
+        case 'afterschool':
+          fte = 0
+          break
+        default:
+          fte = pb.typicalFteMin
+          break
+      }
+    }
+
+    if (fte > 0) {
+      // Skip some positions for smaller schools
+      if (headcount < 200 && ['asst_director', 'dean_students', 'hr_coordinator', 'development_director', 'communications_coord'].includes(pb.id)) {
+        continue
+      }
+      if (headcount < 300 && ['instructional_coach', 'librarian'].includes(pb.id)) {
+        continue
+      }
+
+      rows.push({
+        id: String(nextId++),
+        title: pb.title,
+        category: pb.category,
+        fte: Math.round(fte * 10) / 10,
+        salary: pb.benchmarkSalary,
+      })
+    }
+  }
+
+  return rows
+}
+
+// ── StepIndicator ────────────────────────────────────────────────────────────
+
+function StepIndicator({ currentStep }: { currentStep: number }) {
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between">
+        {STEP_META.map((s, i) => {
+          const Icon = s.icon
+          const done = i < currentStep
+          const active = i === currentStep
+          return (
+            <div key={s.label} className="flex flex-col items-center relative" style={{ flex: 1 }}>
+              {/* Connecting line */}
+              {i > 0 && (
+                <div
+                  className="absolute top-4 -translate-y-1/2 h-0.5"
+                  style={{
+                    left: '-50%',
+                    right: '50%',
+                    backgroundColor: done || active ? TEAL : '#e5e7eb',
+                  }}
+                />
+              )}
+              {/* Circle */}
+              <div className="relative z-10">
+                {done ? (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white"
+                    style={{ backgroundColor: TEAL }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                ) : active ? (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-white"
+                    style={{ border: `2px solid ${TEAL}`, color: TEAL }}
+                  >
+                    <Icon size={14} />
+                    <div
+                      className="absolute inset-0 rounded-full animate-pulse"
+                      style={{
+                        border: `2px solid ${TEAL}`,
+                        opacity: 0.4,
+                        margin: '-3px',
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-200 text-gray-400">
+                    <Icon size={14} />
+                  </div>
+                )}
+              </div>
+              {/* Label */}
+              <span
+                className={`text-[11px] mt-1.5 text-center leading-tight ${
+                  active ? 'font-semibold text-gray-800' : done ? 'text-gray-600' : 'text-gray-400'
+                }`}
+              >
+                {s.label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -171,10 +295,9 @@ export default function OnboardingPage() {
   const [schoolId, setSchoolId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [info, setInfo] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // ── Mode for SchoolLaunch import ──
+  // ── Mode ──
   const [mode, setMode] = useState<'wizard' | 'import'>('wizard')
   const [importStep, setImportStep] = useState<'upload' | 'parsing' | 'confirm' | 'complete'>('upload')
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
@@ -185,52 +308,91 @@ export default function OnboardingPage() {
 
   // ── Step 0: School Identity ──
   const [name, setName] = useState('')
+  const [region, setRegion] = useState('King County')
   const [authorizer, setAuthorizer] = useState('Washington State Charter School Commission')
-  const [gradesCurrentFirst, setGradesCurrentFirst] = useState('')
-  const [gradesCurrentLast, setGradesCurrentLast] = useState('')
-  const [gradesBuildoutFirst, setGradesBuildoutFirst] = useState('')
-  const [gradesBuildoutLast, setGradesBuildoutLast] = useState('')
-  const [headcount, setHeadcount] = useState('')
-  const [currentFtes, setCurrentFtes] = useState('')
-  const [priorYearFtes, setPriorYearFtes] = useState('')
+  const [foundingGrades, setFoundingGrades] = useState<string[]>([])
+  const [buildoutGrades, setBuildoutGrades] = useState<string[]>([])
   const [operatingYear, setOperatingYear] = useState(1)
 
   // ── Step 1: Enrollment & Demographics ──
+  const [headcount, setHeadcount] = useState('')
   const [aaftePct, setAaftePct] = useState(95)
+  const [currentFtes, setCurrentFtes] = useState('')
+  const [priorYearFtes, setPriorYearFtes] = useState('')
   const [frlPct, setFrlPct] = useState(45)
   const [iepPct, setIepPct] = useState(14)
   const [ellPct, setEllPct] = useState(12)
   const [hicapPct, setHicapPct] = useState(5)
 
-  // ── Step 2: Dates & Financials ──
-  const [nextBoardMeeting, setNextBoardMeeting] = useState('')
-  const [boardMeetingFrequency, setBoardMeetingFrequency] = useState('Monthly')
-  const [nextFinanceCommittee, setNextFinanceCommittee] = useState('')
-  const [openingCashBalance, setOpeningCashBalance] = useState('')
+  // ── Step 2: Staffing ──
+  const [staffing, setStaffing] = useState<StaffRow[]>([])
+  const [staffingInitialized, setStaffingInitialized] = useState(false)
 
-  // ── Step 3: First Upload ──
-  const [dragging, setDragging] = useState(false)
-  const [parsing, setParsing] = useState(false)
-  const [uploadSuccess, setUploadSuccess] = useState(false)
-  const [uploadFileName, setUploadFileName] = useState('')
-  const [allDataRows, setAllDataRows] = useState<string[][]>([])
-  const [columnMappings, setColumnMappings] = useState<ColumnMappingResult[]>([])
-  const [mappedData, setMappedData] = useState<MappedCategory[]>([])
-  const [mappedGrants, setMappedGrants] = useState<MappedGrant[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // ── Step 3: Operations ──
+  const [facilityCost, setFacilityCost] = useState('')
+  const [hasFoodProgram, setHasFoodProgram] = useState(false)
+  const [grantsDonations, setGrantsDonations] = useState('')
+  const [loans, setLoans] = useState('')
+  const [suppliesPerPupil, setSuppliesPerPupil] = useState(300)
+  const [techPerPupil, setTechPerPupil] = useState(200)
+  const [contractedPerPupil, setContractedPerPupil] = useState(150)
+  const [pdPerPupil, setPdPerPupil] = useState(100)
 
-  // ── Step 4: Financial Assumptions ──
+  // ── Financial Assumptions ──
   const [assumptions, setAssumptions] = useState<FinancialAssumptions>({
     ...DEFAULT_FINANCIAL_ASSUMPTIONS,
   })
+
+  // ── Computed ──
+  const hc = parseInt(headcount) || 0
+
+  const grantEstimates = {
+    titleI: frlPct >= 40 ? Math.round(hc * (frlPct / 100) * 880) : 0,
+    idea: Math.round(hc * (iepPct / 100) * 2200),
+    lap: Math.round(hc * (frlPct / 100) * 400),
+    tbip: Math.round(hc * (ellPct / 100) * 1800),
+    hicap: Math.round(hc * (hicapPct / 100) * 500),
+  }
+  const totalGrants = grantEstimates.titleI + grantEstimates.idea + grantEstimates.lap + grantEstimates.tbip + grantEstimates.hicap
+
+  // Base revenue from headcount (regular ed + sped + facilities)
+  const aafte = Math.round(hc * aaftePct / 100)
+  const baseRevenue = Math.round(aafte * assumptions.regular_ed_per_pupil) +
+    Math.round(Math.round(aafte * iepPct / 100) * assumptions.sped_per_pupil) +
+    Math.round(aafte * assumptions.facilities_per_pupil)
+  const totalRevenue = baseRevenue + totalGrants
+
+  // Personnel cost from staffing
+  const totalSalaries = staffing.reduce((s, r) => s + r.fte * r.salary, 0)
+  const totalBenefits = Math.round(totalSalaries * BENEFITS_RATE)
+  const totalPersonnelCost = totalSalaries + totalBenefits
+  const totalFte = staffing.reduce((s, r) => s + r.fte, 0)
+
+  const teacherCount = staffing
+    .filter((r) => r.title.toLowerCase().includes('classroom teacher'))
+    .reduce((s, r) => s + r.fte, 0)
+  const studentTeacherRatio = teacherCount > 0 ? Math.round(hc / teacherCount * 10) / 10 : 0
+
+  const personnelPctOfRevenue = totalRevenue > 0 ? Math.round(totalPersonnelCost / totalRevenue * 1000) / 10 : 0
+
+  // Operations cost
+  const monthlyFacility = parseFloat(facilityCost) || 0
+  const annualFacility = monthlyFacility * 12
+  const foodCost = hasFoodProgram ? hc * 5 * 180 : 0
+  const suppliesCost = hc * suppliesPerPupil
+  const techCost = hc * techPerPupil
+  const contractedCost = hc * contractedPerPupil
+  const pdCost = hc * pdPerPupil
+  const totalOperationsCost = annualFacility + foodCost + suppliesCost + techCost + contractedCost + pdCost
+  const totalExpenses = totalPersonnelCost + totalOperationsCost
+  const additionalFunding = (parseFloat(grantsDonations) || 0) + (parseFloat(loans) || 0)
+  const netPosition = totalRevenue - totalExpenses
 
   // ── On mount: check for existing school ──
   useEffect(() => {
     ;(async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
+        const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
           router.push('/login')
           return
@@ -239,7 +401,7 @@ export default function OnboardingPage() {
         const { data: school } = await supabase
           .from('schools')
           .select(
-            'id, name, authorizer, grades_current_first, grades_current_last, grades_buildout_first, grades_buildout_last, current_ftes, prior_year_ftes, headcount, operating_year, next_board_meeting, next_finance_committee, opening_cash_balance, onboarding_completed, financial_assumptions, frl_pct, iep_pct, ell_pct, hicap_pct, sped_pct, board_meeting_frequency',
+            'id, name, authorizer, grades_current_first, grades_current_last, grades_buildout_first, grades_buildout_last, current_ftes, prior_year_ftes, headcount, operating_year, onboarding_completed, financial_assumptions, frl_pct, iep_pct, ell_pct, hicap_pct, sped_pct',
           )
           .eq('user_id', user.id)
           .single()
@@ -251,21 +413,12 @@ export default function OnboardingPage() {
 
         if (school) {
           setSchoolId(school.id)
-          // Populate fields from existing record
           if (school.name) setName(school.name)
           if (school.authorizer) setAuthorizer(school.authorizer)
-          if (school.grades_current_first) setGradesCurrentFirst(school.grades_current_first)
-          if (school.grades_current_last) setGradesCurrentLast(school.grades_current_last)
-          if (school.grades_buildout_first) setGradesBuildoutFirst(school.grades_buildout_first)
-          if (school.grades_buildout_last) setGradesBuildoutLast(school.grades_buildout_last)
           if (school.headcount) setHeadcount(String(school.headcount))
           if (school.current_ftes) setCurrentFtes(String(school.current_ftes))
           if (school.prior_year_ftes) setPriorYearFtes(String(school.prior_year_ftes))
           if (school.operating_year) setOperatingYear(school.operating_year)
-          if (school.next_board_meeting) setNextBoardMeeting(school.next_board_meeting)
-          if (school.next_finance_committee) setNextFinanceCommittee(school.next_finance_committee)
-          if (school.opening_cash_balance != null) setOpeningCashBalance(String(school.opening_cash_balance))
-          if (school.board_meeting_frequency) setBoardMeetingFrequency(school.board_meeting_frequency)
           if (school.frl_pct != null) setFrlPct(school.frl_pct)
           if (school.iep_pct != null) setIepPct(school.iep_pct)
           if (school.ell_pct != null) setEllPct(school.ell_pct)
@@ -275,226 +428,159 @@ export default function OnboardingPage() {
             if (school.financial_assumptions.aafte_pct != null) setAaftePct(school.financial_assumptions.aafte_pct)
           }
 
-          // Detect resume step: find the first step that isn't filled
+          // Build founding/buildout grades from first/last
+          if (school.grades_current_first && school.grades_current_last) {
+            setFoundingGrades(gradesInRange(school.grades_current_first, school.grades_current_last))
+          }
+          if (school.grades_buildout_first && school.grades_buildout_last) {
+            setBuildoutGrades(gradesInRange(school.grades_buildout_first, school.grades_buildout_last))
+          }
+
+          // Resume detection
           if (!school.name) {
             setStep(0)
           } else if (school.headcount == null || school.frl_pct == null) {
             setStep(1)
-          } else if (school.opening_cash_balance == null) {
-            setStep(2)
           } else {
-            setStep(3)
+            setStep(2)
           }
         }
       } catch {
-        // Silently handle — user will see the welcome screen
+        // Silently handle
       }
       setLoading(false)
     })()
   }, [router])
 
+  // Initialize staffing when entering step 2
+  useEffect(() => {
+    if (step === 2 && !staffingInitialized && hc > 0) {
+      setStaffing(generateStaffingDefaults(hc, foundingGrades))
+      setStaffingInitialized(true)
+    }
+  }, [step, staffingInitialized, hc, foundingGrades])
+
+  // ── Grade toggle helpers ──
+  const toggleFoundingGrade = (g: string) => {
+    setFoundingGrades((prev) => {
+      const next = prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g].sort((a, b) => gradeIndex(a) - gradeIndex(b))
+      // Ensure buildout includes all founding
+      setBuildoutGrades((bo) => {
+        const merged = Array.from(new Set([...bo, ...next])).sort((a, b) => gradeIndex(a) - gradeIndex(b))
+        return merged
+      })
+      return next
+    })
+  }
+
+  const toggleBuildoutGrade = (g: string) => {
+    // Cannot deselect founding grades
+    if (foundingGrades.includes(g)) return
+    setBuildoutGrades((prev) =>
+      prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g].sort((a, b) => gradeIndex(a) - gradeIndex(b)),
+    )
+  }
+
   // ── Navigation ──
   const canGoNext = (): boolean => {
     if (step === 0) return name.trim().length > 0
-    if (step === 1) return true
-    if (step === 2) return openingCashBalance.trim().length > 0
-    if (step === 3) return true
-    if (step === 4) return true
     return true
   }
 
-  const goNext = async () => {
+  const saveStep = useCallback(async (currentStep: number) => {
     setError(null)
-    setInfo(null)
+    setSaving(true)
 
-    // Save on step 0 → 1
-    if (step === 0) {
-      setSaving(true)
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) {
-        setError('Session expired. Please sign in again.')
-        setSaving(false)
-        return
+    try {
+      if (currentStep === 0) {
+        // Save school identity
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          setError('Session expired. Please sign in again.')
+          setSaving(false)
+          return false
+        }
+
+        const sortedFounding = [...foundingGrades].sort((a, b) => gradeIndex(a) - gradeIndex(b))
+        const sortedBuildout = [...buildoutGrades].sort((a, b) => gradeIndex(a) - gradeIndex(b))
+
+        const payload = {
+          user_id: user.id,
+          name: name.trim(),
+          authorizer,
+          grades_current_first: sortedFounding[0] || null,
+          grades_current_last: sortedFounding[sortedFounding.length - 1] || null,
+          grades_buildout_first: sortedBuildout[0] || null,
+          grades_buildout_last: sortedBuildout[sortedBuildout.length - 1] || null,
+          operating_year: operatingYear,
+        }
+
+        const { data: upserted, error: upsertErr } = await supabase
+          .from('schools')
+          .upsert(payload, { onConflict: 'user_id' })
+          .select('id')
+          .single()
+        if (upsertErr) {
+          setError(upsertErr.message)
+          setSaving(false)
+          return false
+        }
+        if (!schoolId) setSchoolId(upserted.id)
       }
 
-      const payload = {
-        user_id: user.id,
-        name: name.trim(),
-        authorizer,
-        grades_current_first: gradesCurrentFirst || null,
-        grades_current_last: gradesCurrentLast || null,
-        grades_buildout_first: gradesBuildoutFirst || null,
-        grades_buildout_last: gradesBuildoutLast || null,
-        headcount: parseInt(headcount) || 0,
-        current_ftes: parseFloat(currentFtes) || 0,
-        prior_year_ftes: parseFloat(priorYearFtes) || 0,
-        operating_year: operatingYear,
+      if (currentStep === 1 && schoolId) {
+        const { error: updateErr } = await supabase
+          .from('schools')
+          .update({
+            headcount: parseInt(headcount) || 0,
+            current_ftes: parseFloat(currentFtes) || 0,
+            prior_year_ftes: parseFloat(priorYearFtes) || 0,
+            frl_pct: frlPct,
+            iep_pct: iepPct,
+            sped_pct: iepPct,
+            ell_pct: ellPct,
+            hicap_pct: hicapPct,
+            financial_assumptions: { ...assumptions, aafte_pct: aaftePct },
+          })
+          .eq('id', schoolId)
+        if (updateErr) {
+          setError(updateErr.message)
+          setSaving(false)
+          return false
+        }
+        setAssumptions((prev) => ({ ...prev, aafte_pct: aaftePct }))
       }
 
-      const { data: upserted, error: upsertErr } = await supabase
-        .from('schools')
-        .upsert(payload, { onConflict: 'user_id' })
-        .select('id')
-        .single()
-      if (upsertErr) {
-        setError(upsertErr.message)
-        setSaving(false)
-        return
-      }
-      if (!schoolId) setSchoolId(upserted.id)
+      // Steps 2 and 3 don't save individually to DB — everything saves on completion
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed.')
       setSaving(false)
+      return false
     }
 
-    // Save on step 1 → 2
-    if (step === 1 && schoolId) {
-      setSaving(true)
-      const { error: updateErr } = await supabase
-        .from('schools')
-        .update({
-          frl_pct: frlPct,
-          iep_pct: iepPct,
-          sped_pct: iepPct, // alias
-          ell_pct: ellPct,
-          hicap_pct: hicapPct,
-          financial_assumptions: { ...assumptions, aafte_pct: aaftePct },
-        })
-        .eq('id', schoolId)
-      if (updateErr) {
-        setError(updateErr.message)
-        setSaving(false)
-        return
-      }
-      setAssumptions((prev) => ({ ...prev, aafte_pct: aaftePct }))
-      setSaving(false)
-    }
+    setSaving(false)
+    return true
+  }, [name, authorizer, foundingGrades, buildoutGrades, operatingYear, schoolId, headcount, currentFtes, priorYearFtes, frlPct, iepPct, ellPct, hicapPct, assumptions, aaftePct])
 
-    // Save on step 2 → 3
-    if (step === 2 && schoolId) {
-      setSaving(true)
-      const { error: updateErr } = await supabase
-        .from('schools')
-        .update({
-          next_board_meeting: nextBoardMeeting || null,
-          board_meeting_frequency: boardMeetingFrequency,
-          next_finance_committee: nextFinanceCommittee || null,
-          opening_cash_balance: parseFloat(openingCashBalance) || 0,
-        })
-        .eq('id', schoolId)
-      if (updateErr) {
-        setError(updateErr.message)
-        setSaving(false)
-        return
-      }
-      setSaving(false)
-    }
-
-    // Save on step 4 → 5 (assumptions)
-    if (step === 4 && schoolId) {
-      setSaving(true)
-      const { error: updateErr } = await supabase
-        .from('schools')
-        .update({ financial_assumptions: assumptions })
-        .eq('id', schoolId)
-      if (updateErr) {
-        setError(updateErr.message)
-        setSaving(false)
-        return
-      }
-      setSaving(false)
-    }
-
-    setStep((s) => s + 1)
+  const goNext = async () => {
+    if (!canGoNext()) return
+    const ok = await saveStep(step)
+    if (ok) setStep((s) => s + 1)
   }
 
   const goBack = () => {
     setError(null)
-    setInfo(null)
-    setStep((s) => Math.max(s - 1, 0))
+    setStep((s) => Math.max(s - 1, step <= 0 ? -1 : 0))
   }
 
-  // ── Upload handling (Step 3) ──
-  const handleFile = async (file: File) => {
-    const ext = file.name.split('.').pop()?.toLowerCase()
-    if (!['csv', 'xlsx', 'xls'].includes(ext ?? '')) {
-      setError('Please upload a CSV or Excel (.xlsx) file.')
-      return
-    }
-
-    setParsing(true)
-    setError(null)
-
-    try {
-      let allRows: string[][]
-      if (ext === 'csv') {
-        const text = await file.text()
-        const result = Papa.parse<string[]>(text, { header: false, skipEmptyLines: true })
-        allRows = (result.data as string[][]).map((row) => row.map((c) => String(c ?? '').trim()))
-      } else {
-        const buffer = await file.arrayBuffer()
-        const workbook = XLSX.read(buffer, { type: 'array' })
-        const sheet = workbook.Sheets[workbook.SheetNames[0]]
-        allRows = (
-          XLSX.utils.sheet_to_json<(string | number)[]>(sheet, { header: 1, defval: '' }) as (string | number)[][]
-        ).map((row) => row.map((c) => String(c ?? '').trim()))
-      }
-
-      if (allRows.length < 2) {
-        setError('The file appears to be empty or has fewer than 2 rows.')
-        setParsing(false)
-        return
-      }
-
-      const headerRow = allRows[0]
-      const dataRows = allRows.slice(1).filter((row) => row.some((c) => c !== ''))
-      const mappings = autoMapColumns(headerRow, dataRows)
-
-      setUploadFileName(file.name)
-      setAllDataRows(dataRows)
-      setColumnMappings(mappings)
-
-      const { categories: mapped, cashBalanceRowsSkipped } = applyMappings(mappings, dataRows)
-      const grants = extractGrants(mappings, dataRows)
-      setMappedData(mapped)
-      setMappedGrants(grants)
-      setUploadSuccess(true)
-
-      if (cashBalanceRowsSkipped > 0) {
-        setInfo(
-          'Opening cash balance is managed in your school profile settings, not through uploads. That row was skipped.',
-        )
-      }
-    } catch {
-      setError('Failed to parse the file. Please check the format and try again.')
-    }
-
-    setParsing(false)
-  }
-
-  const onDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    setDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
-  }
-
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) handleFile(file)
-    e.target.value = ''
-  }
-
-  // ── Step 5: Finish (mark onboarding complete, go to dashboard) ──
+  // ── Completion (Step 4 on mount) ──
   const finishSetup = async () => {
     setSaving(true)
     setError(null)
 
     let resolvedSchoolId = schoolId
     if (!resolvedSchoolId) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         setError('Session expired. Please sign in again.')
         setSaving(false)
@@ -508,46 +594,53 @@ export default function OnboardingPage() {
     }
 
     if (!resolvedSchoolId) {
-      setError('No school profile found. Please go back to Step 1 and save your school info.')
+      setError('No school profile found. Please go back to Step 1.')
       setSaving(false)
       return
     }
 
-    // If they uploaded data, import via the store
-    if (uploadSuccess && mappedData.length > 0) {
-      const { useStore } = await import('@/lib/store')
-      const currentUser = (await supabase.auth.getUser()).data.user
-      if (currentUser) {
-        useStore.getState().setSchoolContext(currentUser.id, resolvedSchoolId)
-        useStore.getState().importFinancialData(
-          mappedData,
-          currentMonthKey(),
-          uploadFileName,
-          allDataRows.length,
-          mappedGrants.length > 0 ? mappedGrants : undefined,
-        )
-      }
-    }
-
-    // Mark onboarding complete
     const { error: completeErr } = await supabase
       .from('schools')
-      .update({ onboarding_completed: true })
+      .update({
+        onboarding_completed: true,
+        financial_assumptions: { ...assumptions, aafte_pct: aaftePct },
+      })
       .eq('id', resolvedSchoolId)
 
     if (completeErr) {
-      setError('Failed to save onboarding status. Please try again.')
+      setError('Failed to complete onboarding. Please try again.')
       setSaving(false)
       return
     }
 
     setSaving(false)
-    router.push('/dashboard')
-    router.refresh()
+    setStep(4)
+  }
+
+  // ── Staffing helpers ──
+  const updateStaffRow = (id: string, field: keyof StaffRow, value: string | number) => {
+    setStaffing((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)),
+    )
+  }
+
+  const addStaffRow = () => {
+    const newId = String(Date.now())
+    setStaffing((prev) => [
+      ...prev,
+      { id: newId, title: 'New Position', category: 'Classified', fte: 1.0, salary: 50000 },
+    ])
+  }
+
+  const removeStaffRow = (id: string) => {
+    setStaffing((prev) => prev.filter((r) => r.id !== id))
+  }
+
+  const resetStaffing = () => {
+    setStaffing(generateStaffingDefaults(hc, foundingGrades))
   }
 
   // ── SchoolLaunch Import Handlers ──
-
   const handleImportFiles = async (files: FileList) => {
     setImportErrors([])
     setImportStep('parsing')
@@ -617,9 +710,7 @@ export default function OnboardingPage() {
     setError(null)
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         setError('Session expired.')
         setSaving(false)
@@ -688,47 +779,21 @@ export default function OnboardingPage() {
     }
   }
 
-  // ── Computed values ──
-
-  const hc = parseInt(headcount) || 0
-
-  // Grant estimates for Step 1
-  const aafte = Math.round(hc * aaftePct / 100)
-  const grantEstimates = {
-    regularEd: Math.round(aafte * assumptions.regular_ed_per_pupil),
-    sped: Math.round(Math.round(aafte * iepPct / 100) * assumptions.sped_per_pupil),
-    facilities: Math.round(aafte * assumptions.facilities_per_pupil),
-    titleI: frlPct >= 40 ? Math.round(Math.round(hc * frlPct / 100) * assumptions.title_i_per_pupil) : 0,
-    idea: Math.round(Math.round(hc * iepPct / 100) * assumptions.idea_per_pupil),
-    lap: Math.round(Math.round(hc * frlPct / 100) * assumptions.lap_per_pupil),
-    tbip: Math.round(Math.round(hc * ellPct / 100) * assumptions.tbip_per_pupil),
-    hicap: Math.round(Math.round(hc * hicapPct / 100) * assumptions.hicap_per_pupil),
-  }
-  const totalEstimatedRevenue =
-    grantEstimates.regularEd +
-    grantEstimates.sped +
-    grantEstimates.facilities +
-    grantEstimates.titleI +
-    grantEstimates.idea +
-    grantEstimates.lap +
-    grantEstimates.tbip +
-    grantEstimates.hicap
-
-  // Revenue model for completion screen
+  // ── Revenue model for completion ──
   const completionRevenue = (() => {
     if (hc === 0) return 0
     const profile: SchoolProfile = {
       name,
       authorizer,
-      gradesCurrentFirst,
-      gradesCurrentLast,
-      gradesBuildoutFirst,
-      gradesBuildoutLast,
+      gradesCurrentFirst: foundingGrades[0] || 'K',
+      gradesCurrentLast: foundingGrades[foundingGrades.length - 1] || '5',
+      gradesBuildoutFirst: buildoutGrades[0] || 'K',
+      gradesBuildoutLast: buildoutGrades[buildoutGrades.length - 1] || '5',
       currentFTES: parseFloat(currentFtes) || 0,
       priorYearFTES: parseFloat(priorYearFtes) || 0,
-      nextBoardMeeting: nextBoardMeeting,
-      nextFinanceCommittee: nextFinanceCommittee,
-      openingCashBalance: parseFloat(openingCashBalance) || 0,
+      nextBoardMeeting: '',
+      nextFinanceCommittee: '',
+      openingCashBalance: 0,
       operatingYear,
       headcount: hc,
       spedPct: iepPct,
@@ -748,136 +813,40 @@ export default function OnboardingPage() {
     return lines.reduce((s, l) => s + l.expected, 0)
   })()
 
-  // ── Render helpers ──
-
-  const renderLogo = () => (
-    <div className="flex items-center justify-center gap-2.5 mb-2">
-      <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-extrabold text-white"
-        style={{
-          background: 'linear-gradient(135deg, #2ec4b6 0%, #14a3a3 100%)',
-          fontFamily: 'var(--font-display), system-ui, sans-serif',
-          boxShadow: '0 2px 8px rgba(46, 196, 182, 0.3)',
-        }}
-      >
-        S
-      </div>
-      <div
-        className="text-2xl tracking-tight"
-        style={{
-          color: 'var(--brand-700)',
-          fontFamily: 'var(--font-display), system-ui, sans-serif',
-          fontWeight: 700,
-        }}
-      >
-        School<span style={{ color: 'var(--accent-500)' }}>CFO</span>
-      </div>
-    </div>
-  )
-
-  const renderStepper = () => (
-    <div className="mb-8">
-      <div className="flex items-center justify-between">
-        {STEPS.map((s, i) => {
-          const Icon = s.icon
-          const done = i < step
-          const active = i === step
-          return (
-            <div key={s.label} className="flex flex-col items-center relative" style={{ flex: 1 }}>
-              {/* Connecting line */}
-              {i > 0 && (
-                <div
-                  className="absolute top-4 -translate-y-1/2 h-0.5"
-                  style={{
-                    left: '-50%',
-                    right: '50%',
-                    background: i <= step ? 'var(--brand-700)' : '#e5e7eb',
-                  }}
-                />
-              )}
-              {/* Circle */}
-              <div className="relative z-10">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                    done
-                      ? 'bg-green-500 text-white'
-                      : active
-                        ? 'text-white'
-                        : 'bg-gray-200 text-gray-400'
-                  }`}
-                  style={active ? { background: 'var(--brand-700)' } : {}}
-                >
-                  {done ? <CheckCircle size={14} /> : <Icon size={14} />}
-                </div>
-                {active && (
-                  <div
-                    className="absolute inset-0 rounded-full animate-pulse"
-                    style={{
-                      border: '2px solid var(--brand-700)',
-                      opacity: 0.4,
-                      margin: '-3px',
-                    }}
-                  />
-                )}
-              </div>
-              {/* Label */}
-              <span
-                className={`text-[11px] mt-1.5 text-center leading-tight ${
-                  active ? 'font-semibold text-gray-800' : done ? 'text-gray-600' : 'text-gray-400'
-                }`}
-              >
-                {s.label}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-
-  // ── Loading state ──
+  // ── Render: Loading ──
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div
           className="w-10 h-10 border-[3px] rounded-full animate-spin"
-          style={{ borderColor: 'var(--brand-200)', borderTopColor: 'var(--brand-600)' }}
+          style={{ borderColor: '#e5e7eb', borderTopColor: TEAL }}
         />
       </div>
     )
   }
 
-  // ── SchoolLaunch Import Flow ──
+  // ── Render: SchoolLaunch Import ──
   if (mode === 'import') {
     return (
-      <div className="w-full max-w-2xl mx-auto px-4">
+      <div className="w-full max-w-4xl mx-auto">
         <div className="text-center mb-6">
-          {renderLogo()}
-          <h1 className="text-lg font-bold text-gray-900 mt-3" style={HEADING_FONT}>
+          <h1 className="text-xl font-bold text-gray-900" style={HEADING_FONT}>
             Import from SchoolLaunch
           </h1>
         </div>
 
         <div
           className="bg-white rounded-xl p-6"
-          style={{ border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)' }}
+          style={{ border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
         >
           {importStep === 'upload' && (
             <div>
-              <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-                Upload your SchoolLaunch export files. You can upload a <strong>zip file</strong> or select individual
-                files:
+              <p className="text-sm mb-4 text-gray-600">
+                Upload your SchoolLaunch export files. You can upload a <strong>zip file</strong> or select individual files:
               </p>
-              <ul className="text-xs mb-4 space-y-1" style={{ color: 'var(--text-tertiary)' }}>
-                <li>
-                  &bull; <strong>Profile JSON</strong> (required) &mdash; your school profile and financial assumptions
-                </li>
-                <li>
-                  &bull; <strong>Budget CSV</strong> (optional) &mdash; projected budget lines
-                </li>
-                <li>
-                  &bull; <strong>PDF Summary</strong> (optional) &mdash; ignored but accepted for convenience
-                </li>
+              <ul className="text-xs mb-4 space-y-1 text-gray-500">
+                <li>&bull; <strong>Profile JSON</strong> (required) — your school profile and financial assumptions</li>
+                <li>&bull; <strong>Budget CSV</strong> (optional) — projected budget lines</li>
               </ul>
 
               <input
@@ -894,30 +863,22 @@ export default function OnboardingPage() {
                 onClick={() => importFileRef.current?.click()}
                 className="w-full py-8 border-2 border-dashed border-gray-300 rounded-lg hover:border-[#2ec4b6] transition-colors text-center"
               >
-                <UploadCloud size={28} className="mx-auto mb-2" style={{ color: 'var(--text-tertiary)' }} />
+                <UploadCloud size={28} className="mx-auto mb-2 text-gray-400" />
                 <p className="text-sm font-medium text-gray-700">Click to select files</p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                  JSON, CSV, ZIP, or PDF
-                </p>
+                <p className="text-xs mt-1 text-gray-400">JSON, CSV, ZIP, or PDF</p>
               </button>
 
               {importErrors.length > 0 && (
                 <div className="mt-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
                   {importErrors.map((err, i) => (
-                    <p key={i} className="text-xs text-red-700">
-                      {err}
-                    </p>
+                    <p key={i} className="text-xs text-red-700">{err}</p>
                   ))}
                 </div>
               )}
 
               <button
-                onClick={() => {
-                  setMode('wizard')
-                  setError(null)
-                }}
-                className="mt-4 text-xs font-medium hover:underline"
-                style={{ color: 'var(--text-tertiary)' }}
+                onClick={() => { setMode('wizard'); setError(null) }}
+                className="mt-4 text-xs font-medium text-gray-400 hover:underline"
               >
                 &larr; Switch to manual setup
               </button>
@@ -927,9 +888,7 @@ export default function OnboardingPage() {
           {importStep === 'parsing' && (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2ec4b6] mx-auto mb-3" />
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                Parsing SchoolLaunch data...
-              </p>
+              <p className="text-sm text-gray-600">Parsing SchoolLaunch data...</p>
             </div>
           )}
 
@@ -937,17 +896,13 @@ export default function OnboardingPage() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <CheckCircle size={18} className="text-green-500" />
-                <h2 className="text-sm font-semibold text-gray-800" style={HEADING_FONT}>
-                  Import Preview
-                </h2>
+                <h2 className="text-sm font-semibold text-gray-800" style={HEADING_FONT}>Import Preview</h2>
               </div>
 
               {importResult.warnings.length > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
                   {importResult.warnings.map((w, i) => (
-                    <p key={i} className="text-xs text-amber-700">
-                      {w}
-                    </p>
+                    <p key={i} className="text-xs text-amber-700">{w}</p>
                   ))}
                 </div>
               )}
@@ -961,7 +916,6 @@ export default function OnboardingPage() {
                       value={importProfile.name}
                       onChange={(e) => setImportProfile({ ...importProfile, name: e.target.value })}
                       className={inputCls}
-                      style={inputStyle}
                     />
                   </div>
                   <div>
@@ -972,19 +926,14 @@ export default function OnboardingPage() {
                     </p>
                   </div>
                   <div>
-                    <label className="block text-gray-400 mb-0.5">Enrollment (Year 1)</label>
+                    <label className="block text-gray-400 mb-0.5">Enrollment</label>
                     <input
                       type="number"
                       value={importProfile.headcount}
                       onChange={(e) =>
-                        setImportProfile({
-                          ...importProfile,
-                          headcount: Number(e.target.value),
-                          currentFTES: Number(e.target.value),
-                        })
+                        setImportProfile({ ...importProfile, headcount: Number(e.target.value), currentFTES: Number(e.target.value) })
                       }
                       className={inputCls}
-                      style={inputStyle}
                     />
                   </div>
                   <div>
@@ -994,7 +943,6 @@ export default function OnboardingPage() {
                       value={importProfile.frlPct}
                       onChange={(e) => setImportProfile({ ...importProfile, frlPct: Number(e.target.value) })}
                       className={inputCls}
-                      style={inputStyle}
                     />
                   </div>
                 </div>
@@ -1005,13 +953,10 @@ export default function OnboardingPage() {
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                     Budget Lines ({importBudgetLines.length})
                   </h3>
-                  <div
-                    className="max-h-48 overflow-y-auto border rounded-lg"
-                    style={{ borderColor: 'var(--border-default)' }}
-                  >
+                  <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="bg-gray-50 border-b" style={{ borderColor: 'var(--border-default)' }}>
+                        <tr className="bg-gray-50 border-b border-gray-200">
                           <th className="text-left py-1.5 px-3 font-medium text-gray-500">Category</th>
                           <th className="text-right py-1.5 px-3 font-medium text-gray-500">Budget</th>
                           <th className="text-left py-1.5 px-3 font-medium text-gray-500">Type</th>
@@ -1019,17 +964,13 @@ export default function OnboardingPage() {
                       </thead>
                       <tbody>
                         {importBudgetLines.map((line, i) => (
-                          <tr key={i} className="border-b last:border-0" style={{ borderColor: 'var(--border-subtle)' }}>
+                          <tr key={i} className="border-b last:border-0 border-gray-100">
                             <td className="py-1.5 px-3 text-gray-700">{line.category}</td>
-                            <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">
-                              ${line.budget.toLocaleString()}
-                            </td>
+                            <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">${line.budget.toLocaleString()}</td>
                             <td className="py-1.5 px-3">
                               <span
                                 className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                  line.accountType === 'revenue'
-                                    ? 'bg-green-50 text-green-700'
-                                    : 'bg-gray-100 text-gray-600'
+                                  line.accountType === 'revenue' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'
                                 }`}
                               >
                                 {line.accountType}
@@ -1040,15 +981,6 @@ export default function OnboardingPage() {
                       </tbody>
                     </table>
                   </div>
-                </div>
-              )}
-
-              {importResult.staffingPlan.length > 0 && (
-                <div className="mb-5">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                    Staffing Plan ({importResult.staffingPlan.length} positions,{' '}
-                    {importResult.staffingPlan.reduce((s, p) => s + p.fte, 0).toFixed(1)} FTE)
-                  </h3>
                 </div>
               )}
 
@@ -1063,29 +995,21 @@ export default function OnboardingPage() {
                   onClick={finishImport}
                   disabled={saving || !importProfile.name}
                   className="flex-1 py-2.5 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-                  style={PRIMARY_BTN}
+                  style={{ backgroundColor: TEAL }}
                 >
                   {saving ? 'Importing...' : 'Confirm & Import'}
                 </button>
                 <button
-                  onClick={() => {
-                    setImportStep('upload')
-                    setImportResult(null)
-                  }}
-                  className="px-4 py-2.5 text-sm font-medium rounded-lg border"
-                  style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                  onClick={() => { setImportStep('upload'); setImportResult(null) }}
+                  className="px-4 py-2.5 text-sm font-medium rounded-lg border border-gray-300 text-gray-600"
                 >
                   Back
                 </button>
               </div>
 
               <button
-                onClick={() => {
-                  setMode('wizard')
-                  setError(null)
-                }}
-                className="mt-3 text-xs font-medium hover:underline block"
-                style={{ color: 'var(--text-tertiary)' }}
+                onClick={() => { setMode('wizard'); setError(null) }}
+                className="mt-3 text-xs font-medium text-gray-400 hover:underline block"
               >
                 Switch to manual setup instead
               </button>
@@ -1101,52 +1025,34 @@ export default function OnboardingPage() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4">
-      {/* Logo */}
-      <div className="text-center mb-4">{renderLogo()}</div>
-
-      {/* Stepper (always visible, gray on welcome) */}
-      {step >= 0 ? (
-        renderStepper()
-      ) : (
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            {STEPS.map((s) => (
-              <div key={s.label} className="flex flex-col items-center" style={{ flex: 1 }}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-200 text-gray-400">
-                  <s.icon size={14} />
-                </div>
-                <span className="text-[11px] mt-1.5 text-center leading-tight text-gray-400">{s.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+    <div className="w-full max-w-4xl mx-auto">
+      {/* Step Indicator */}
+      <StepIndicator currentStep={step} />
 
       {/* Card */}
       <div
         className="p-8"
         style={{
-          background: 'var(--surface-card, #fff)',
+          background: '#fff',
           borderRadius: '12px',
-          border: '1px solid var(--border-default, #e5e7eb)',
+          border: '1px solid #e5e7eb',
           boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04)',
         }}
       >
-        {/* ═══════════════════ STEP -1: WELCOME ═══════════════════ */}
+        {/* ═══════════ STEP -1: WELCOME ═══════════ */}
         {step === -1 && (
           <div className="text-center">
-            <h1 className="text-xl text-gray-900 mb-2" style={HEADING_FONT}>
+            <h1 className="text-2xl text-gray-900 mb-2" style={HEADING_FONT}>
               Welcome to SchoolCFO
             </h1>
-            <p className="text-sm mb-5" style={{ color: 'var(--text-secondary)' }}>
+            <p className="text-sm mb-5 text-gray-600">
               Let&apos;s set up your school&apos;s financial management
             </p>
-            <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--text-tertiary)' }}>
-              We&apos;ll walk you through 5 quick steps to get your school configured: your school identity, enrollment
-              and demographics, key dates and opening cash, your first financial data upload, and financial assumptions.
+            <p className="text-sm leading-relaxed mb-4 text-gray-500">
+              We&apos;ll walk you through 5 quick steps: your school identity, enrollment and demographics,
+              staffing plan, operations budget, and a final review.
             </p>
-            <p className="text-xs mb-8 italic" style={{ color: 'var(--text-tertiary)' }}>
+            <p className="text-xs mb-8 italic text-gray-400">
               You can change any of these answers later in Settings.
             </p>
 
@@ -1154,18 +1060,14 @@ export default function OnboardingPage() {
               <button
                 onClick={() => setStep(0)}
                 className="py-2.5 px-6 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity"
-                style={PRIMARY_BTN}
+                style={{ backgroundColor: TEAL, fontFamily: 'var(--font-display), system-ui, sans-serif' }}
               >
                 Get Started
               </button>
               <button
                 onClick={() => setMode('import')}
                 className="py-2.5 px-6 text-sm font-semibold rounded-lg border-2 hover:shadow-sm transition-all"
-                style={{
-                  borderColor: 'var(--brand-700)',
-                  color: 'var(--brand-700)',
-                  fontFamily: 'var(--font-display), system-ui, sans-serif',
-                }}
+                style={{ borderColor: TEAL, color: TEAL, fontFamily: 'var(--font-display), system-ui, sans-serif' }}
               >
                 Import from SchoolLaunch
               </button>
@@ -1173,20 +1075,19 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* ═══════════════════ STEP 0: SCHOOL IDENTITY ═══════════════════ */}
+        {/* ═══════════ STEP 0: SCHOOL IDENTITY ═══════════ */}
         {step === 0 && (
           <div>
-            <h1 className="text-lg text-gray-900 mb-1" style={HEADING_FONT}>
-              School Identity
-            </h1>
-            <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
+            <h1 className="text-lg text-gray-900 mb-1" style={HEADING_FONT}>School Identity</h1>
+            <p className="text-sm mb-6 text-gray-600">
               Basic information about your school. This helps us tailor dashboards and reports.
             </p>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* School Name */}
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  School name <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium mb-1.5 text-gray-700">
+                  School Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -1194,733 +1095,683 @@ export default function OnboardingPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className={inputCls}
-                  style={inputStyle}
                   placeholder="e.g. Cascade Charter Elementary"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  Authorizer
-                </label>
-                <select
-                  value={authorizer}
-                  onChange={(e) => setAuthorizer(e.target.value)}
-                  className={inputCls}
-                  style={inputStyle}
-                >
-                  {AUTHORIZER_OPTIONS.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <GradeSpanSelector
-                label="Grades currently served"
-                description="The grade levels your school serves this year"
-                firstGrade={gradesCurrentFirst}
-                lastGrade={gradesCurrentLast}
-                onFirstChange={setGradesCurrentFirst}
-                onLastChange={setGradesCurrentLast}
-                inputCls={inputCls}
-                inputStyle={inputStyle}
-              />
-
-              <GradeSpanSelector
-                label="Grades at full build-out"
-                description="The grade levels your school will serve when fully grown"
-                firstGrade={gradesBuildoutFirst}
-                lastGrade={gradesBuildoutLast}
-                onFirstChange={setGradesBuildoutFirst}
-                onLastChange={setGradesBuildoutLast}
-                inputCls={inputCls}
-                inputStyle={inputStyle}
-              />
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    Headcount (enrolled)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={headcount}
-                    onChange={(e) => setHeadcount(e.target.value)}
-                    className={inputCls}
-                    style={inputStyle}
-                    placeholder="e.g. 200"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    Current FTES
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={currentFtes}
-                    onChange={(e) => setCurrentFtes(e.target.value)}
-                    className={inputCls}
-                    style={inputStyle}
-                    placeholder="e.g. 187"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    Prior year FTES
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={priorYearFtes}
-                    onChange={(e) => setPriorYearFtes(e.target.value)}
-                    className={inputCls}
-                    style={inputStyle}
-                    placeholder="e.g. 175"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  Operating year
-                </label>
-                <select
-                  value={operatingYear}
-                  onChange={(e) => setOperatingYear(Number(e.target.value))}
-                  className={inputCls}
-                  style={inputStyle}
-                >
-                  {OPERATING_YEAR_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════════════ STEP 1: ENROLLMENT & DEMOGRAPHICS ═══════════════════ */}
-        {step === 1 && (
-          <div>
-            <h1 className="text-lg text-gray-900 mb-1" style={HEADING_FONT}>
-              Enrollment &amp; Demographics
-            </h1>
-            <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-              These percentages drive your revenue projections. We&apos;ll show estimated grant amounts as you adjust.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left: Inputs */}
-              <div className="space-y-5">
-                {/* Headcount (read-only) + AAFTE */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                      Headcount
-                    </label>
-                    <input type="number" value={headcount} readOnly className={inputCls + ' bg-gray-50 cursor-not-allowed'} style={inputStyle} />
-                    <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                      From Step 1
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                      AAFTE %
-                    </label>
-                    <input
-                      type="number"
-                      min="50"
-                      max="100"
-                      value={aaftePct}
-                      onChange={(e) => setAaftePct(Number(e.target.value))}
-                      className={inputCls}
-                      style={inputStyle}
-                    />
-                    <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                      Default 95%
-                    </p>
-                  </div>
-                </div>
-
-                {/* Demographic sliders */}
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
-                    Free &amp; Reduced Lunch (FRL)
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={frlPct}
-                      onChange={(e) => setFrlPct(Number(e.target.value))}
-                      className="flex-1"
-                    />
-                    <span className="w-12 text-right text-sm font-medium tabular-nums">{frlPct}%</span>
-                  </div>
-                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                    WA avg ~45%
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
-                    IEP (Special Education)
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min="0"
-                      max="30"
-                      value={iepPct}
-                      onChange={(e) => setIepPct(Number(e.target.value))}
-                      className="flex-1"
-                    />
-                    <span className="w-12 text-right text-sm font-medium tabular-nums">{iepPct}%</span>
-                  </div>
-                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                    WA avg ~14%
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
-                    English Language Learners (ELL)
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min="0"
-                      max="40"
-                      value={ellPct}
-                      onChange={(e) => setEllPct(Number(e.target.value))}
-                      className="flex-1"
-                    />
-                    <span className="w-12 text-right text-sm font-medium tabular-nums">{ellPct}%</span>
-                  </div>
-                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                    WA avg ~12%
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
-                    Highly Capable (HiCap)
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min="0"
-                      max="15"
-                      value={hicapPct}
-                      onChange={(e) => setHicapPct(Number(e.target.value))}
-                      className="flex-1"
-                    />
-                    <span className="w-12 text-right text-sm font-medium tabular-nums">{hicapPct}%</span>
-                  </div>
-                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                    WA avg ~5%
-                  </p>
-                </div>
-              </div>
-
-              {/* Right: Live grant estimates */}
-              <div>
-                <div
-                  className="rounded-lg p-4"
-                  style={{
-                    background: 'var(--brand-50, #f0f4f8)',
-                    border: '1px solid var(--border-default, #e5e7eb)',
-                  }}
-                >
-                  <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--brand-700)' }}>
-                    Estimated Annual Revenue
-                  </h3>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--text-secondary)' }}>Regular Ed ({aafte} AAFTE)</span>
-                      <span className="font-medium tabular-nums">{fmtDollars(grantEstimates.regularEd)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--text-secondary)' }}>SPED ({iepPct}% IEP)</span>
-                      <span className="font-medium tabular-nums">{fmtDollars(grantEstimates.sped)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--text-secondary)' }}>Facilities</span>
-                      <span className="font-medium tabular-nums">{fmtDollars(grantEstimates.facilities)}</span>
-                    </div>
-                    {frlPct >= 40 && (
-                      <div className="flex justify-between">
-                        <span style={{ color: 'var(--text-secondary)' }}>Title I ({frlPct}% FRL)</span>
-                        <span className="font-medium tabular-nums">{fmtDollars(grantEstimates.titleI)}</span>
-                      </div>
-                    )}
-                    {frlPct < 40 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Title I (FRL below 40%)</span>
-                        <span className="text-gray-400">&mdash;</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--text-secondary)' }}>IDEA ({iepPct}% IEP)</span>
-                      <span className="font-medium tabular-nums">{fmtDollars(grantEstimates.idea)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--text-secondary)' }}>LAP ({frlPct}% FRL)</span>
-                      <span className="font-medium tabular-nums">{fmtDollars(grantEstimates.lap)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--text-secondary)' }}>TBIP ({ellPct}% ELL)</span>
-                      <span className="font-medium tabular-nums">{fmtDollars(grantEstimates.tbip)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--text-secondary)' }}>HiCap ({hicapPct}%)</span>
-                      <span className="font-medium tabular-nums">{fmtDollars(grantEstimates.hicap)}</span>
-                    </div>
-
-                    <div className="border-t pt-2 mt-2 flex justify-between" style={{ borderColor: 'var(--border-default)' }}>
-                      <span className="font-semibold" style={{ color: 'var(--brand-700)' }}>
-                        Total Estimated
-                      </span>
-                      <span className="font-bold tabular-nums" style={{ color: 'var(--brand-700)' }}>
-                        {fmtDollars(totalEstimatedRevenue)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════════════ STEP 2: DATES & FINANCIALS ═══════════════════ */}
-        {step === 2 && (
-          <div>
-            <h1 className="text-lg text-gray-900 mb-1" style={HEADING_FONT}>
-              Dates &amp; Cash
-            </h1>
-            <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-              We&apos;ll use these to prepare reports and reminders ahead of time.
-            </p>
-
-            <div className="space-y-4">
-              {/* Fiscal year display (read-only) */}
+              {/* Region + Authorizer */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    Fiscal year
-                  </label>
-                  <div className={inputCls + ' bg-gray-50 cursor-not-allowed'} style={inputStyle}>
-                    September 1 &ndash; August 31
-                  </div>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700">WA Region</label>
+                  <select value={region} onChange={(e) => setRegion(e.target.value)} className={inputCls}>
+                    {WA_REGIONS.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    Current fiscal month
-                  </label>
-                  <div className={inputCls + ' bg-gray-50 cursor-not-allowed'} style={inputStyle}>
-                    {getCurrentFiscalMonth()}
-                  </div>
+                  <label className="block text-sm font-medium mb-1.5 text-gray-700">Authorizer</label>
+                  <select value={authorizer} onChange={(e) => setAuthorizer(e.target.value)} className={inputCls}>
+                    {AUTHORIZER_OPTIONS.map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
+              {/* Founding Grades */}
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  Next board meeting date
-                </label>
-                <input
-                  type="date"
-                  value={nextBoardMeeting}
-                  onChange={(e) => setNextBoardMeeting(e.target.value)}
-                  className={inputCls}
-                  style={inputStyle}
-                />
+                <label className="block text-sm font-medium mb-2 text-gray-700">Founding Grades</label>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_GRADES.map((g) => {
+                    const selected = foundingGrades.includes(g)
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => toggleFoundingGrade(g)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          selected ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                        style={selected ? { backgroundColor: TEAL } : {}}
+                      >
+                        {g}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
+              {/* Full Buildout Grades */}
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  Board meeting frequency
-                </label>
-                <select
-                  value={boardMeetingFrequency}
-                  onChange={(e) => setBoardMeetingFrequency(e.target.value)}
-                  className={inputCls}
-                  style={inputStyle}
-                >
-                  <option value="Monthly">Monthly</option>
-                  <option value="Bi-Monthly">Bi-Monthly</option>
-                  <option value="Quarterly">Quarterly</option>
+                <label className="block text-sm font-medium mb-2 text-gray-700">Full Buildout Grades</label>
+                <p className="text-xs text-gray-400 mb-2">Founding grades are locked. Select additional grades for your buildout plan.</p>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_GRADES.map((g) => {
+                    const isFounding = foundingGrades.includes(g)
+                    const selected = buildoutGrades.includes(g)
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => toggleBuildoutGrade(g)}
+                        disabled={isFounding}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
+                          isFounding
+                            ? 'text-white opacity-70 cursor-not-allowed'
+                            : selected
+                              ? 'text-white'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                        style={isFounding || selected ? { backgroundColor: TEAL } : {}}
+                      >
+                        {isFounding && <Lock size={10} />}
+                        {g}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Operating Year */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5 text-gray-700">Operating Year</label>
+                <select value={operatingYear} onChange={(e) => setOperatingYear(Number(e.target.value))} className={inputCls}>
+                  {OPERATING_YEAR_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  Next finance committee date
-                </label>
-                <input
-                  type="date"
-                  value={nextFinanceCommittee}
-                  onChange={(e) => setNextFinanceCommittee(e.target.value)}
-                  className={inputCls}
-                  style={inputStyle}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                  Opening cash balance <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={openingCashBalance}
-                    onChange={(e) => setOpeningCashBalance(e.target.value)}
-                    className={inputCls + ' pl-7'}
-                    style={inputStyle}
-                    placeholder="e.g. 250000"
-                  />
+              {/* Dynamic summary */}
+              {foundingGrades.length > 0 && (
+                <div className="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-700">
+                  Currently serving <strong>{foundingGrades.join(', ')}</strong>
+                  {buildoutGrades.length > foundingGrades.length && (
+                    <> &rarr; Growing to <strong>{buildoutGrades.join(', ')}</strong></>
+                  )}
                 </div>
-                <p className="text-xs mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                  Your school&apos;s cash balance at the start of this fiscal year &mdash; found on your prior year
-                  financial statements.
-                </p>
-              </div>
+              )}
             </div>
-          </div>
-        )}
 
-        {/* ═══════════════════ STEP 3: FIRST UPLOAD ═══════════════════ */}
-        {step === 3 && (
-          <div>
-            <h1 className="text-lg text-gray-900 mb-1" style={HEADING_FONT}>
-              Upload Your Financial Data
-            </h1>
-            <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-              Drop a CSV or Excel file with your budget data. We&apos;ll automatically map columns and start analyzing.
-              Not sure about the format?{' '}
-              <a
-                href="/cascade-charter-sample.csv"
-                download
-                className="font-medium hover:opacity-75 transition-opacity"
-                style={{ color: 'var(--brand-700)' }}
-              >
-                <Download size={12} className="inline -mt-0.5 mr-0.5" />
-                Download a sample file
-              </a>
-            </p>
-
-            {!uploadSuccess ? (
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setDragging(true)
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={onDrop}
-                onClick={() => !parsing && fileInputRef.current?.click()}
-                className={`rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                  dragging
-                    ? 'border-[#1e3a5f] bg-blue-50'
-                    : 'border-gray-300 hover:border-[#1e3a5f] hover:bg-gray-50'
-                }`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  className="hidden"
-                  onChange={onFileChange}
-                />
-                {parsing ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <div
-                      className="w-10 h-10 border-[3px] rounded-full animate-spin"
-                      style={{ borderColor: 'var(--brand-200)', borderTopColor: 'var(--brand-600)' }}
-                    />
-                    <p className="text-sm text-gray-500">Reading file...</p>
-                  </div>
-                ) : (
-                  <>
-                    <UploadCloud size={36} className={dragging ? 'text-[#1e3a5f]' : 'text-gray-400'} />
-                    <p className="mt-3 text-sm font-medium text-gray-700">Drop your file here or click to browse</p>
-                    <p className="text-xs text-gray-400 mt-1">CSV and Excel (.xlsx) files accepted</p>
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-green-200 bg-green-50 p-5">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                    <CheckCircle size={20} className="text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-green-800">{uploadFileName}</p>
-                    <p className="text-xs text-green-600">
-                      {allDataRows.length} rows &middot; {mappedData.length} budget categories
-                      {mappedGrants.length > 0 && ` \u00b7 ${mappedGrants.length} grants`}
-                      {isFullyMapped(columnMappings) && ' \u00b7 All columns auto-detected'}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setUploadSuccess(false)
-                    setUploadFileName('')
-                    setMappedData([])
-                    setMappedGrants([])
-                  }}
-                  className="mt-3 text-xs font-medium hover:underline"
-                  style={{ color: 'var(--brand-700)' }}
-                >
-                  Upload a different file
-                </button>
+            {/* Error */}
+            {error && (
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                <p className="text-xs text-red-700">{error}</p>
               </div>
             )}
-          </div>
-        )}
 
-        {/* ═══════════════════ STEP 4: FINANCIAL ASSUMPTIONS ═══════════════════ */}
-        {step === 4 && (
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <h1 className="text-lg text-gray-900" style={HEADING_FONT}>
-                Financial Assumptions
-              </h1>
-              <button
-                onClick={() => setAssumptions({ ...DEFAULT_FINANCIAL_ASSUMPTIONS })}
-                className="text-xs font-medium hover:underline"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                Reset All to Defaults
-              </button>
-            </div>
-            <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-              Pre-populated with WA state defaults. Adjust these to match your school&apos;s situation.
-            </p>
-
-            <div className="space-y-5 max-h-[50vh] overflow-y-auto pr-1">
-              {ASSUMPTION_GROUPS.map((group) => (
-                <div
-                  key={group.title}
-                  className="rounded-lg p-4"
-                  style={{
-                    background: 'var(--surface-card, #fff)',
-                    border: '1px solid var(--border-default, #e5e7eb)',
-                  }}
-                >
-                  <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--brand-700)' }}>
-                    {group.title}
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {group.fields.map((field) => (
-                      <div key={field.key}>
-                        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                          {field.label}
-                        </label>
-                        <div className="relative">
-                          {field.prefix && (
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                              {field.prefix}
-                            </span>
-                          )}
-                          <input
-                            type="number"
-                            step={field.step ?? 1}
-                            value={assumptions[field.key]}
-                            onChange={(e) =>
-                              setAssumptions((prev) => ({ ...prev, [field.key]: Number(e.target.value) }))
-                            }
-                            className={`${inputCls} text-xs ${field.prefix ? 'pl-7' : ''}`}
-                            style={inputStyle}
-                          />
-                          {field.suffix && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                              {field.suffix}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════════════ STEP 5: COMPLETION ═══════════════════ */}
-        {step === 5 && (
-          <div className="text-center">
-            <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle size={28} className="text-green-600" />
-            </div>
-            <h1 className="text-xl text-gray-900 mb-2" style={HEADING_FONT}>
-              You&apos;re All Set!
-            </h1>
-            <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-              Here&apos;s a summary of your school&apos;s configuration.
-            </p>
-
-            {/* Summary metrics */}
-            <div
-              className="rounded-lg p-5 mb-6 text-left"
-              style={{
-                background: 'var(--brand-50, #f0f4f8)',
-                border: '1px solid var(--border-default, #e5e7eb)',
-              }}
-            >
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    School
-                  </span>
-                  <span className="font-semibold text-gray-900">{name}</span>
-                </div>
-                <div>
-                  <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    Grade Configuration
-                  </span>
-                  <span className="font-semibold text-gray-900">
-                    {gradesCurrentFirst || '?'}&ndash;{gradesCurrentLast || '?'}
-                    {gradesBuildoutFirst && gradesBuildoutLast && (
-                      <span className="text-gray-400 font-normal">
-                        {' '}
-                        &rarr; {gradesBuildoutFirst}&ndash;{gradesBuildoutLast}
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    Enrollment
-                  </span>
-                  <span className="font-semibold text-gray-900">{hc} students</span>
-                </div>
-                <div>
-                  <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    Estimated Annual Revenue
-                  </span>
-                  <span className="font-semibold text-gray-900">{fmtDollars(completionRevenue)}</span>
-                </div>
-                <div>
-                  <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    Opening Cash Balance
-                  </span>
-                  <span className="font-semibold text-gray-900">{fmtDollars(parseFloat(openingCashBalance) || 0)}</span>
-                </div>
-                <div>
-                  <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    Operating Year
-                  </span>
-                  <span className="font-semibold text-gray-900">
-                    Year {operatingYear} ({operatingYear <= 2 ? 'Stage 1' : 'Stage 2'})
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* What happens next */}
-            <div className="text-left mb-6">
-              <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
-                What happens next
-              </h3>
-              <ul className="text-sm space-y-1.5" style={{ color: 'var(--text-tertiary)' }}>
-                <li>&bull; Your dashboard will show a morning briefing with key metrics and alerts</li>
-                <li>&bull; Upload monthly financial data as you receive it from your accounting system</li>
-                <li>&bull; Board packets can be generated before each board meeting</li>
-                <li>&bull; Ask Your CFO is available anytime for questions about your finances</li>
-                <li>&bull; All settings can be changed later from the Settings page</li>
-              </ul>
-            </div>
-
-            <button
-              onClick={finishSetup}
-              disabled={saving}
-              className="py-2.5 px-8 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60"
-              style={PRIMARY_BTN}
-            >
-              {saving ? 'Setting up...' : 'Go to Dashboard'}
-            </button>
-          </div>
-        )}
-
-        {/* ── Error / Info ── */}
-        {error && (
-          <p
-            className="text-sm px-3.5 py-2.5 mt-5"
-            style={{
-              color: 'var(--danger-700, #b91c1c)',
-              background: 'var(--danger-50, #fef2f2)',
-              border: '1px solid var(--danger-100, #fee2e2)',
-              borderRadius: '8px',
-            }}
-          >
-            {error}
-          </p>
-        )}
-
-        {info && (
-          <p
-            className="text-sm px-3.5 py-2.5 mt-5"
-            style={{
-              color: 'var(--brand-700)',
-              background: '#eef6ff',
-              border: '1px solid #c6ddf7',
-              borderRadius: '8px',
-            }}
-          >
-            {info}
-          </p>
-        )}
-
-        {/* ── Navigation (not shown on welcome or completion) ── */}
-        {step >= 0 && step <= 4 && (
-          <div className="flex items-center justify-between mt-8 pt-5 border-t border-gray-100">
-            <div>
-              {step > 0 && (
-                <button
-                  onClick={goBack}
-                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-                >
-                  <ArrowLeft size={14} />
-                  Back
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Skip on steps 3 (upload) */}
-              {step === 3 && !uploadSuccess && (
-                <button
-                  onClick={() => setStep((s) => s + 1)}
-                  disabled={saving}
-                  className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  Skip for now
-                </button>
-              )}
-
+            {/* Navigation */}
+            <div className="mt-6 flex justify-end">
               <button
                 onClick={goNext}
                 disabled={!canGoNext() || saving}
-                className="flex items-center gap-1.5 px-5 py-2.5 text-white text-sm font-semibold hover:opacity-90 disabled:opacity-60 transition-opacity rounded-lg"
-                style={PRIMARY_BTN}
+                className="flex items-center gap-2 py-2.5 px-6 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: TEAL }}
               >
-                {saving ? 'Saving...' : 'Next'}
-                {!saving && <ArrowRight size={14} />}
+                {saving ? 'Saving...' : 'Continue'}
+                <ArrowRight size={16} />
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ═══════════ STEP 1: ENROLLMENT & DEMOGRAPHICS ═══════════ */}
+        {step === 1 && (
+          <div>
+            <h1 className="text-lg text-gray-900 mb-1" style={HEADING_FONT}>Enrollment &amp; Demographics</h1>
+            <p className="text-sm mb-6 text-gray-600">
+              Your enrollment numbers and student demographics help us estimate grants and revenue.
+            </p>
+
+            {/* Enrollment */}
+            <div className="mb-8">
+              <h2 className="text-sm font-semibold text-gray-800 mb-3">Enrollment</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1 text-gray-600">Current Headcount <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    value={headcount}
+                    onChange={(e) => setHeadcount(e.target.value)}
+                    className={inputCls}
+                    placeholder="200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1 text-gray-600">AAFTE %</label>
+                  <input
+                    type="number"
+                    value={aaftePct}
+                    onChange={(e) => setAaftePct(Number(e.target.value))}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1 text-gray-600">Current FTES</label>
+                  <input
+                    type="number"
+                    value={currentFtes}
+                    onChange={(e) => setCurrentFtes(e.target.value)}
+                    className={inputCls}
+                    placeholder={String(Math.round(hc * aaftePct / 100))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1 text-gray-600">Prior Year FTES</label>
+                  <input
+                    type="number"
+                    value={priorYearFtes}
+                    onChange={(e) => setPriorYearFtes(e.target.value)}
+                    className={inputCls}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Demographics + Grant Estimates */}
+            <h2 className="text-sm font-semibold text-gray-800 mb-3">Demographics</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Sliders */}
+              <div className="space-y-5">
+                {[
+                  { label: 'Free/Reduced Lunch (FRL)', value: frlPct, set: setFrlPct, max: 100, avg: 48 },
+                  { label: 'IEP / Special Ed', value: iepPct, set: setIepPct, max: 30, avg: 14 },
+                  { label: 'English Language Learners', value: ellPct, set: setEllPct, max: 40, avg: 12 },
+                  { label: 'Highly Capable', value: hicapPct, set: setHicapPct, max: 15, avg: 5 },
+                ].map((s) => (
+                  <div key={s.label}>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-xs font-medium text-gray-600">{s.label}</label>
+                      <span className="text-xs font-semibold tabular-nums" style={{ color: TEAL }}>{s.value}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={s.max}
+                      value={s.value}
+                      onChange={(e) => s.set(Number(e.target.value))}
+                      className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, ${TEAL} 0%, ${TEAL} ${(s.value / s.max) * 100}%, #e5e7eb ${(s.value / s.max) * 100}%, #e5e7eb 100%)`,
+                      }}
+                    />
+                    <p className="text-[10px] text-gray-400 mt-0.5">Regional average: ~{s.avg}%</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Grant Estimates Card */}
+              <div
+                className="bg-gray-50 rounded-xl p-5"
+                style={{ border: '1px solid #e5e7eb' }}
+              >
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Estimated Grants</h3>
+                <div className="space-y-2.5">
+                  {frlPct >= 40 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Title I</span>
+                      <span className="font-medium tabular-nums text-gray-800">{fmtDollars(grantEstimates.titleI)}</span>
+                    </div>
+                  )}
+                  {frlPct < 40 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Title I</span>
+                      <span className="text-xs text-gray-400">FRL below 40%</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">IDEA</span>
+                    <span className="font-medium tabular-nums text-gray-800">{fmtDollars(grantEstimates.idea)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">LAP</span>
+                    <span className="font-medium tabular-nums text-gray-800">{fmtDollars(grantEstimates.lap)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">TBIP</span>
+                    <span className="font-medium tabular-nums text-gray-800">{fmtDollars(grantEstimates.tbip)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">HiCap</span>
+                    <span className="font-medium tabular-nums text-gray-800">{fmtDollars(grantEstimates.hicap)}</span>
+                  </div>
+                  <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between text-sm">
+                    <span className="font-semibold text-gray-800">Total Estimated Grants</span>
+                    <span className="font-bold tabular-nums" style={{ color: TEAL }}>{fmtDollars(totalGrants)}</span>
+                  </div>
+                </div>
+                {hc === 0 && (
+                  <p className="text-xs text-gray-400 mt-3 italic">Enter headcount above to see estimates.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                <p className="text-xs text-red-700">{error}</p>
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="mt-6 flex justify-between">
+              <button
+                onClick={goBack}
+                className="flex items-center gap-2 py-2.5 px-5 text-sm font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+              >
+                <ArrowLeft size={16} />
+                Back
+              </button>
+              <button
+                onClick={goNext}
+                disabled={saving}
+                className="flex items-center gap-2 py-2.5 px-6 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: TEAL }}
+              >
+                {saving ? 'Saving...' : 'Continue'}
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════ STEP 2: STAFFING ═══════════ */}
+        {step === 2 && (
+          <div>
+            <h1 className="text-lg text-gray-900 mb-1" style={HEADING_FONT}>Staffing Plan</h1>
+            <p className="text-sm mb-4 text-gray-600">
+              We pre-populated positions based on your enrollment. Adjust FTE and salary as needed.
+            </p>
+
+            {/* Summary bar */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              {[
+                { label: 'Total Personnel Cost', value: fmtDollars(totalPersonnelCost) },
+                { label: 'Personnel % of Revenue', value: `${personnelPctOfRevenue}%` },
+                { label: 'Total FTE', value: totalFte.toFixed(1) },
+                { label: 'Student:Teacher', value: studentTeacherRatio > 0 ? `${studentTeacherRatio}:1` : 'N/A' },
+              ].map((m) => (
+                <div key={m.label} className="bg-gray-50 rounded-lg p-3 text-center" style={{ border: '1px solid #e5e7eb' }}>
+                  <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">{m.label}</p>
+                  <p className="text-lg font-bold text-gray-800 mt-0.5" style={HEADING_FONT}>{m.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto border border-gray-200 rounded-lg mb-4">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left py-2 px-3 font-medium text-gray-500 text-xs">Position</th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-500 text-xs w-24">Category</th>
+                    <th className="text-right py-2 px-3 font-medium text-gray-500 text-xs w-20">FTE</th>
+                    <th className="text-right py-2 px-3 font-medium text-gray-500 text-xs w-28">Salary</th>
+                    <th className="text-right py-2 px-3 font-medium text-gray-500 text-xs w-24">Benefits</th>
+                    <th className="text-right py-2 px-3 font-medium text-gray-500 text-xs w-28">Total Cost</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staffing.map((row) => {
+                    const benefits = Math.round(row.salary * BENEFITS_RATE)
+                    const totalCost = Math.round(row.fte * (row.salary + benefits))
+                    const catColor = row.category === 'Administrative' ? 'bg-blue-50 text-blue-700' :
+                      row.category === 'Certificated' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+                    return (
+                      <tr key={row.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
+                        <td className="py-1.5 px-3">
+                          <input
+                            type="text"
+                            value={row.title}
+                            onChange={(e) => updateStaffRow(row.id, 'title', e.target.value)}
+                            className="w-full text-sm bg-transparent border-0 p-0 focus:outline-none focus:ring-0 text-gray-800"
+                          />
+                        </td>
+                        <td className="py-1.5 px-3">
+                          <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium ${catColor}`}>
+                            {row.category}
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3 text-right">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            value={row.fte}
+                            onChange={(e) => updateStaffRow(row.id, 'fte', parseFloat(e.target.value) || 0)}
+                            className="w-16 text-sm text-right bg-transparent border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#2ec4b6]/30"
+                          />
+                        </td>
+                        <td className="py-1.5 px-3 text-right">
+                          <div className="flex items-center justify-end">
+                            <span className="text-gray-400 text-xs mr-0.5">$</span>
+                            <input
+                              type="number"
+                              step="1000"
+                              min="0"
+                              value={row.salary}
+                              onChange={(e) => updateStaffRow(row.id, 'salary', parseInt(e.target.value) || 0)}
+                              className="w-20 text-sm text-right bg-transparent border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#2ec4b6]/30"
+                            />
+                          </div>
+                        </td>
+                        <td className="py-1.5 px-3 text-right tabular-nums text-gray-500 text-xs">
+                          {fmtDollars(benefits)}
+                        </td>
+                        <td className="py-1.5 px-3 text-right tabular-nums font-medium text-gray-800 text-xs">
+                          {fmtDollars(totalCost)}
+                        </td>
+                        <td className="py-1.5 px-1">
+                          <button
+                            onClick={() => removeStaffRow(row.id)}
+                            className="text-gray-300 hover:text-red-500 transition-colors"
+                          >
+                            <X size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={addStaffRow}
+                className="flex items-center gap-1.5 text-sm font-medium hover:opacity-80 transition-opacity"
+                style={{ color: TEAL }}
+              >
+                <Plus size={14} />
+                Add Position
+              </button>
+              <button
+                onClick={resetStaffing}
+                className="text-xs text-gray-400 hover:text-gray-600 underline"
+              >
+                Reset to Defaults
+              </button>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                <p className="text-xs text-red-700">{error}</p>
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="mt-6 flex justify-between">
+              <button
+                onClick={goBack}
+                className="flex items-center gap-2 py-2.5 px-5 text-sm font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+              >
+                <ArrowLeft size={16} />
+                Back
+              </button>
+              <button
+                onClick={goNext}
+                disabled={saving}
+                className="flex items-center gap-2 py-2.5 px-6 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: TEAL }}
+              >
+                {saving ? 'Saving...' : 'Continue'}
+                <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════ STEP 3: OPERATIONS ═══════════ */}
+        {step === 3 && (
+          <div>
+            <h1 className="text-lg text-gray-900 mb-1" style={HEADING_FONT}>Operations</h1>
+            <p className="text-sm mb-6 text-gray-600">
+              Facility costs, food service, and per-pupil operating expenses.
+            </p>
+
+            <div className="space-y-6">
+              {/* Facilities */}
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800 mb-2">Facilities</h2>
+                <label className="block text-xs font-medium mb-1 text-gray-600">Monthly Facility Cost</label>
+                <p className="text-[10px] text-gray-400 mb-1.5">Rent, utilities, maintenance</p>
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-400 text-sm">$</span>
+                  <input
+                    type="number"
+                    value={facilityCost}
+                    onChange={(e) => setFacilityCost(e.target.value)}
+                    className={inputCls}
+                    style={{ maxWidth: '200px' }}
+                    placeholder="15000"
+                  />
+                  <span className="text-xs text-gray-400">/month</span>
+                </div>
+              </div>
+
+              {/* Food Program */}
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800 mb-2">Food Program</h2>
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hasFoodProgram}
+                    onChange={(e) => setHasFoodProgram(e.target.checked)}
+                    className="w-4 h-4 rounded accent-[#2ec4b6]"
+                  />
+                  <span className="text-sm text-gray-700">School operates a food service program</span>
+                </label>
+                {hasFoodProgram && hc > 0 && (
+                  <p className="text-xs text-gray-500 mt-1.5 ml-6">
+                    Estimated annual cost: <strong>{fmtDollars(foodCost)}</strong> ({hc} students x $5/day x 180 days)
+                  </p>
+                )}
+              </div>
+
+              {/* Additional Funding */}
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800 mb-2">Additional Funding</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-600">Grants / Donations</label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-400 text-sm">$</span>
+                      <input
+                        type="number"
+                        value={grantsDonations}
+                        onChange={(e) => setGrantsDonations(e.target.value)}
+                        className={inputCls}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-600">Loans</label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-400 text-sm">$</span>
+                      <input
+                        type="number"
+                        value={loans}
+                        onChange={(e) => setLoans(e.target.value)}
+                        className={inputCls}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Per-Pupil Operational Costs */}
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800 mb-2">Per-Pupil Operational Costs</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Supplies', value: suppliesPerPupil, set: setSuppliesPerPupil, default_: 300 },
+                    { label: 'Technology', value: techPerPupil, set: setTechPerPupil, default_: 200 },
+                    { label: 'Contracted Services', value: contractedPerPupil, set: setContractedPerPupil, default_: 150 },
+                    { label: 'Professional Dev.', value: pdPerPupil, set: setPdPerPupil, default_: 100 },
+                  ].map((item) => (
+                    <div key={item.label}>
+                      <label className="block text-xs font-medium mb-1 text-gray-600">{item.label}</label>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-400 text-xs">$</span>
+                        <input
+                          type="number"
+                          value={item.value}
+                          onChange={(e) => item.set(Number(e.target.value))}
+                          className={inputCls}
+                        />
+                        <span className="text-[10px] text-gray-400">/student</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Year 1 Financial Summary */}
+              <div
+                className="rounded-xl p-5"
+                style={{ backgroundColor: '#f8fafa', border: '1px solid #e5e7eb' }}
+              >
+                <h3 className="text-sm font-semibold text-gray-800 mb-3" style={HEADING_FONT}>Year 1 Financial Summary</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Total Revenue</span>
+                    <span className="font-medium tabular-nums text-gray-800">{fmtDollars(totalRevenue)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Personnel Cost</span>
+                    <span className="font-medium tabular-nums text-gray-800">{fmtDollars(totalPersonnelCost)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Operations Cost</span>
+                    <span className="font-medium tabular-nums text-gray-800">{fmtDollars(totalOperationsCost)}</span>
+                  </div>
+                  <div className="border-t border-gray-200 pt-2 flex justify-between text-sm">
+                    <span className="text-gray-600">Total Expenses</span>
+                    <span className="font-semibold tabular-nums text-gray-800">{fmtDollars(totalExpenses)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="font-semibold text-gray-800">Net Position</span>
+                    <span
+                      className="font-bold tabular-nums"
+                      style={{ color: netPosition >= 0 ? '#16a34a' : '#dc2626' }}
+                    >
+                      {fmtDollars(netPosition)}
+                    </span>
+                  </div>
+                  {additionalFunding > 0 && (
+                    <div className="flex justify-between text-sm pt-1">
+                      <span className="text-gray-500">Additional Funding</span>
+                      <span className="font-medium tabular-nums text-gray-600">+{fmtDollars(additionalFunding)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Complete Setup button */}
+                <button
+                  onClick={finishSetup}
+                  disabled={saving}
+                  className="mt-5 w-full py-3 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                  style={{ backgroundColor: TEAL, fontFamily: 'var(--font-display), system-ui, sans-serif' }}
+                >
+                  {saving ? 'Saving...' : 'Complete Setup'}
+                </button>
+              </div>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                <p className="text-xs text-red-700">{error}</p>
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="mt-6 flex justify-start">
+              <button
+                onClick={goBack}
+                className="flex items-center gap-2 py-2.5 px-5 text-sm font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50"
+              >
+                <ArrowLeft size={16} />
+                Back
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════ STEP 4: COMPLETION ═══════════ */}
+        {step === 4 && (
+          <div className="text-center">
+            {/* Animated checkmark */}
+            <div className="mb-4 inline-flex items-center justify-center">
+              <div
+                className="w-20 h-20 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: '#dcfce7' }}
+              >
+                <CheckCircle size={40} className="text-green-500" />
+              </div>
+            </div>
+
+            <h1 className="text-2xl text-gray-900 mb-2" style={HEADING_FONT}>
+              Your School is Ready!
+            </h1>
+            <p className="text-sm text-gray-500 mb-6">
+              {name} has been configured. Here&apos;s your Year 1 snapshot.
+            </p>
+
+            {/* Metric cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+              {[
+                { label: 'Year 1 Revenue', value: fmtDollars(completionRevenue || totalRevenue) },
+                { label: 'Personnel Cost', value: fmtDollars(totalPersonnelCost) },
+                { label: 'Total FTE', value: totalFte.toFixed(1) },
+                { label: 'Personnel %', value: `${personnelPctOfRevenue}%` },
+              ].map((m) => (
+                <div key={m.label} className="bg-gray-50 rounded-lg p-4" style={{ border: '1px solid #e5e7eb' }}>
+                  <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">{m.label}</p>
+                  <p className="text-xl font-bold text-gray-800 mt-1" style={HEADING_FONT}>{m.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* What happens next */}
+            <div className="text-left bg-gray-50 rounded-xl p-5 mb-6" style={{ border: '1px solid #e5e7eb' }}>
+              <h3 className="text-sm font-semibold text-gray-800 mb-3" style={HEADING_FONT}>What happens next</h3>
+              <div className="space-y-3">
+                {[
+                  { icon: UploadCloud, text: 'Upload your financial data' },
+                  { icon: BarChart3, text: 'Explore your Dashboard' },
+                  { icon: MessageSquare, text: 'Review the AI Briefing' },
+                  { icon: Clipboard, text: 'Generate your first Board Packet' },
+                ].map((item) => (
+                  <div key={item.text} className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: '#f0fdfa', color: TEAL }}
+                    >
+                      <item.icon size={14} />
+                    </div>
+                    <span className="text-sm text-gray-700">{item.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                router.push('/dashboard')
+                router.refresh()
+              }}
+              className="py-3 px-8 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: TEAL, fontFamily: 'var(--font-display), system-ui, sans-serif' }}
+            >
+              Go to Dashboard
+            </button>
           </div>
         )}
       </div>

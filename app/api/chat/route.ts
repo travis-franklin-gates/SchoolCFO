@@ -4,7 +4,8 @@ import { CLAUDE_MODEL } from '@/lib/constants'
 import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
 import { type FinancialAssumptions, mergeAssumptions } from '@/lib/financialAssumptions'
 import { buildRevenueModel, formatRevenueModelForPrompt } from '@/lib/revenueModel'
-import type { SchoolProfile, BudgetCategory } from '@/lib/store'
+import type { SchoolProfile, BudgetCategory, FinancialSnapshot } from '@/lib/store'
+import { buildFpfScorecard, formatFpfForPrompt } from '@/lib/fpfScorecard'
 import { createClient } from '@/lib/supabase-server'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -52,6 +53,35 @@ function buildRevenueModelSection(
   return formatRevenueModelForPrompt(lines)
 }
 
+function buildFpfSection(
+  profile: SchoolProfile,
+  fd: { totalBudget: number; revenueBudget: number; ytdSpending: number; ytdRevenue: number; ytdExpenses?: number; cashOnHand: number; daysOfReserves: number; variancePercent: number; categories: Array<{ name: string; ytdActuals: number; budget: number; burnRate: number; alertStatus: string; accountType?: string }> },
+): string {
+  if (!profile.operatingYear) return ''
+  const snapshot: FinancialSnapshot = {
+    totalBudget: fd.totalBudget,
+    revenueBudget: fd.revenueBudget,
+    ytdSpending: fd.ytdSpending,
+    ytdRevenue: fd.ytdRevenue,
+    ytdExpenses: fd.ytdExpenses ?? fd.ytdSpending,
+    cashOnHand: fd.cashOnHand,
+    daysOfReserves: fd.daysOfReserves,
+    variancePercent: fd.variancePercent,
+    categories: fd.categories.map((c) => ({
+      name: c.name,
+      ytdActuals: c.ytdActuals,
+      budget: c.budget,
+      burnRate: c.burnRate,
+      alertStatus: (c.alertStatus || 'ok') as BudgetCategory['alertStatus'],
+      accountType: (c.accountType ?? 'expense') as 'revenue' | 'expense',
+      projectedYearEnd: 0,
+    })),
+    monthlySpend: [],
+  }
+  const scorecard = buildFpfScorecard(profile, snapshot)
+  return formatFpfForPrompt(scorecard)
+}
+
 function buildSystemPrompt(
   schoolProfile: Record<string, unknown>,
   financialData: Record<string, unknown>,
@@ -72,11 +102,12 @@ function buildSystemPrompt(
     totalBudget: number
     revenueBudget: number
     ytdSpending: number
+    ytdRevenue: number
     ytdExpenses?: number
     cashOnHand: number
     daysOfReserves: number
     variancePercent: number
-    categories: Array<{ name: string; ytdActuals: number; budget: number; burnRate: number; alertStatus: string }>
+    categories: Array<{ name: string; ytdActuals: number; budget: number; burnRate: number; alertStatus: string; accountType?: string }>
   }
 
   const sp = schoolProfile as {
@@ -187,6 +218,8 @@ ${grants.map((g) => {
   const pct = ((grant.spent / grant.awardAmount) * 100).toFixed(0)
   return `- ${grant.name}: $${grant.spent.toLocaleString()} of $${grant.awardAmount.toLocaleString()} (${pct}% spent) — ${grant.status}`
 }).join('\n')}${otherGrantsSection}
+
+${buildFpfSection(sp as unknown as SchoolProfile, fd)}
 
 ACTIVE ALERTS:
 ${alerts.map((a) => {

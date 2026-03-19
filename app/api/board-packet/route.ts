@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { CLAUDE_MODEL } from '@/lib/constants'
 import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
+import { type FpfScorecardResult, formatFpfForPrompt } from '@/lib/fpfScorecard'
 import { createClient } from '@/lib/supabase-server'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
       grants,
       alerts,
       schoolContextEntries = [],
+      fpfScorecard = null,
     } = await req.json()
 
     const expectedPct = Math.round(pace * 100)
@@ -79,7 +81,7 @@ ${grantList}
 Active alerts:
 ${alertList || 'None'}
 
-${OSPI_SCHEDULE}${buildSchoolContextBlock(schoolContextEntries as ContextEntry[])}
+${OSPI_SCHEDULE}${fpfScorecard ? '\n\n' + formatFpfForPrompt(fpfScorecard as FpfScorecardResult) : ''}${buildSchoolContextBlock(schoolContextEntries as ContextEntry[])}
 
 Return a JSON object with exactly these three keys. No other text, no markdown fences — just raw JSON:
 

@@ -18,6 +18,7 @@ import {
 import { useStore, type PacketStatus, type BoardPacketContent } from '@/lib/store'
 import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, labelFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
 import { generateBoardPacketPdf, type BoardPacketPdfData } from '@/lib/boardPacketPdf'
+import { buildFpfScorecard, type FpfStatus } from '@/lib/fpfScorecard'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -254,6 +255,7 @@ export default function BoardPacketPage() {
           grants,
           alerts,
           schoolContextEntries,
+          fpfScorecard: buildFpfScorecard(schoolProfile, financialData),
         }),
       })
 
@@ -312,6 +314,14 @@ export default function BoardPacketPage() {
         apWarrants: AP_WARRANTS,
         payrollWarrants: PAYROLL_WARRANTS,
         hasRealWarrants: AP_WARRANTS.length > 0 || PAYROLL_WARRANTS.length > 0,
+        ...(() => {
+          const sc = buildFpfScorecard(schoolProfile, financialData)
+          return {
+            fpfMetrics: sc.metrics.map((m) => ({ name: m.name, formatted: m.formatted, threshold: m.threshold, status: m.status })),
+            fpfStage: sc.stage,
+            fpfSummary: `${sc.met} of ${sc.applicable} applicable metrics met.`,
+          }
+        })(),
       }
 
       await generateBoardPacketPdf(pdfData)
@@ -998,6 +1008,53 @@ export default function BoardPacketPage() {
               </div>
             </div>
           </Section>
+
+          {/* ── Section 7: FPF Scorecard ── */}
+          {(() => {
+            const scorecard = buildFpfScorecard(schoolProfile, financialData)
+            const fpfStatusCls: Record<FpfStatus, string> = {
+              'meets':             'bg-green-50 text-green-700',
+              'does-not-meet':     'bg-red-50 text-red-700',
+              'not-evaluated':     'bg-gray-50 text-gray-400',
+              'insufficient-data': 'bg-gray-50 text-gray-400',
+            }
+            const fpfStatusLabel: Record<FpfStatus, string> = {
+              'meets': 'Meets', 'does-not-meet': 'Does Not Meet',
+              'not-evaluated': 'N/A', 'insufficient-data': 'Insufficient Data',
+            }
+            return (
+              <Section number={7} title={`Commission FPF Scorecard — Stage ${scorecard.stage}`}>
+                <p className="text-xs text-gray-500 mb-3">
+                  Financial Performance Framework evaluation — Stage {scorecard.stage} (Year {schoolProfile.operatingYear}).
+                  {' '}{scorecard.met} of {scorecard.applicable} applicable metrics met.
+                </p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-gray-300">
+                      <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-600">Metric</th>
+                      <th className="text-right py-1.5 px-2 text-xs font-semibold text-gray-600">Value</th>
+                      <th className="text-left py-1.5 px-2 text-xs font-semibold text-gray-600">Threshold</th>
+                      <th className="text-center py-1.5 px-2 text-xs font-semibold text-gray-600">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scorecard.metrics.map((m, i) => (
+                      <tr key={m.key} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="py-1.5 px-2 text-gray-800">{m.name}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums font-medium text-gray-700">{m.formatted}</td>
+                        <td className="py-1.5 px-2 text-xs text-gray-500">{m.threshold}</td>
+                        <td className="py-1.5 px-2 text-center">
+                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${fpfStatusCls[m.status]}`}>
+                            {fpfStatusLabel[m.status]}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Section>
+            )
+          })()}
         </div>
       )}
 

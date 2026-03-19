@@ -467,6 +467,7 @@ export default function SettingsPage() {
       gradesBuildoutLast: profile.gradesBuildoutLast,
       currentFTES: Number(profile.currentFTES),
       priorYearFTES: Number(profile.priorYearFTES),
+      operatingYear: Number(profile.operatingYear),
       openingCashBalance: Number(profile.openingCashBalance),
       headcount: Number(profile.headcount),
       spedPct: Number(profile.spedPct),
@@ -670,6 +671,18 @@ export default function SettingsPage() {
               onChange={(e) => setProfile({ ...profile, priorYearFTES: Number(e.target.value) })}
               className={inputCls}
             />
+          </div>
+          <div>
+            <label className={labelCls}>Operating Year</label>
+            <select
+              value={profile.operatingYear}
+              onChange={(e) => setProfile({ ...profile, operatingYear: Number(e.target.value) })}
+              className={inputCls}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((y) => (
+                <option key={y} value={y}>Year {y}{y <= 2 ? ' (FPF Stage 1)' : ' (FPF Stage 2)'}</option>
+              ))}
+            </select>
           </div>
           {/* ── Enrollment & Demographics ── */}
           <div className="col-span-2 pt-2 border-t border-gray-100">

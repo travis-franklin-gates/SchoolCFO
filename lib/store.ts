@@ -25,6 +25,7 @@ export interface SchoolProfile {
   nextBoardMeeting: string
   nextFinanceCommittee: string
   openingCashBalance: number
+  operatingYear: number  // Year of operation (1-2 = Stage 1, 3+ = Stage 2 for FPF)
   // Student demographics for revenue model
   headcount: number
   spedPct: number
@@ -506,6 +507,7 @@ export const useStore = create<AppState>((set, get) => ({
     nextBoardMeeting: '2026-03-26',
     nextFinanceCommittee: '2026-03-19',
     openingCashBalance: 338000,
+    operatingYear: 3,
     headcount: 450,
     spedPct: 14,
     frlPct: 52,
@@ -582,6 +584,7 @@ export const useStore = create<AppState>((set, get) => ({
           nextBoardMeeting: school.next_board_meeting || existing.nextBoardMeeting,
           nextFinanceCommittee: school.next_finance_committee || existing.nextFinanceCommittee,
           openingCashBalance: school.opening_cash_balance != null ? Number(school.opening_cash_balance) : existing.openingCashBalance,
+          operatingYear: Number(school.operating_year) || existing.operatingYear,
           headcount: Number(school.headcount) || existing.headcount,
           spedPct: Number(school.sped_pct) || existing.spedPct,
           frlPct: Number(school.frl_pct) || existing.frlPct,
@@ -922,6 +925,7 @@ export const useStore = create<AppState>((set, get) => ({
             next_board_meeting: updated.nextBoardMeeting || null,
             next_finance_committee: updated.nextFinanceCommittee || null,
             opening_cash_balance: updated.openingCashBalance ?? 0,
+            operating_year: updated.operatingYear ?? 3,
             headcount: updated.headcount ?? 0,
             sped_pct: updated.spedPct ?? 0,
             frl_pct: updated.frlPct ?? 0,
@@ -1716,6 +1720,7 @@ export const useStore = create<AppState>((set, get) => ({
       nextBoardMeeting: '',
       nextFinanceCommittee: '',
       openingCashBalance: 0,
+      operatingYear: 3,
       headcount: 0,
       spedPct: 0,
       frlPct: 0,

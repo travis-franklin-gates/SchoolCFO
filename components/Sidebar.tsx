@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   X,
+  ShieldCheck,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { supabase } from '@/lib/supabase'
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/budget-analysis', icon: BarChart2, label: 'Budget Analysis' },
   { href: '/grant-tracker', icon: Award, label: 'Grant Tracker' },
   { href: '/board-packet', icon: FileText, label: 'Board Packet' },
+  { href: '/fpf-scorecard', icon: ShieldCheck, label: 'FPF Scorecard' },
   { href: '/audit-prep', icon: ClipboardCheck, label: 'Audit Prep' },
   { href: '/ask-cfo', icon: MessageCircle, label: 'Ask Your CFO' },
   { href: '/settings', icon: Settings, label: 'Settings' },

@@ -50,6 +50,9 @@ export interface BoardPacketPdfData {
   apWarrants: WarrantRow[]
   payrollWarrants: WarrantRow[]
   hasRealWarrants: boolean
+  fpfMetrics?: { name: string; formatted: string; threshold: string; status: string }[]
+  fpfStage?: number
+  fpfSummary?: string
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -800,6 +803,37 @@ export async function generateBoardPacketPdf(data: BoardPacketPdfData): Promise<
   pdf.setFont('helvetica', 'normal')
   pdf.setTextColor(TEXT_MED.r, TEXT_MED.g, TEXT_MED.b)
   pdf.text('Signature & Date', sig2X, sigY + 40)
+
+  // ── Section 7: FPF Scorecard ────────────────────────────────────────────────
+
+  if (data.fpfMetrics && data.fpfMetrics.length > 0) {
+    startSection(7, `Commission FPF Scorecard — Stage ${data.fpfStage ?? 2}`)
+
+    if (data.fpfSummary) {
+      writeWrapped(data.fpfSummary, MARGIN, CONTENT_W, 9, 'normal', TEXT_MED)
+      curY += 6
+    }
+
+    const fpfCols: ColDef[] = [
+      { label: 'Metric', width: 180, align: 'left' },
+      { label: 'Value', width: 100, align: 'right' },
+      { label: 'Threshold', width: 120, align: 'left' },
+      { label: 'Status', width: 68, align: 'center' },
+    ]
+    const fpfHeader = fpfCols.map((c) => ({ text: c.label, color: WHITE }))
+    const fpfRows = data.fpfMetrics.map((m) => {
+      const statusColor = m.status === 'meets' ? GREEN
+        : m.status === 'does-not-meet' ? RED
+        : TEXT_MED
+      return [
+        { text: m.name, color: TEXT_DARK },
+        { text: m.formatted, color: TEXT_DARK },
+        { text: m.threshold, color: TEXT_MED },
+        { text: m.status === 'meets' ? 'Meets' : m.status === 'does-not-meet' ? 'Does Not Meet' : m.status === 'not-evaluated' ? 'N/A' : 'Insuff. Data', color: statusColor },
+      ]
+    })
+    drawTable(fpfCols, fpfHeader, fpfRows)
+  }
 
   // ── Save ───────────────────────────────────────────────────────────────────
 

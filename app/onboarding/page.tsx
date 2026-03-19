@@ -31,6 +31,8 @@ import {
   type SchoolCFOField,
 } from '@/lib/uploadPipeline'
 import { currentMonthKey } from '@/lib/fiscalYear'
+import { parseSchoolLaunchProfile, parseBudgetCSV, type SchoolLaunchProfile, type ImportResult, type ImportedBudgetLine } from '@/lib/schoollaunchImport'
+import { mergeAssumptions } from '@/lib/financialAssumptions'
 import GradeSpanSelector from '@/components/GradeSpanSelector'
 
 const STEPS = [
@@ -73,10 +75,19 @@ const inputStyle = { border: '1px solid var(--border-default)', borderRadius: 'v
 
 export default function GuidedOnboardingPage() {
   const router = useRouter()
+  const [mode, setMode] = useState<'choose' | 'manual' | 'import'>('choose')
   const [currentStep, setCurrentStep] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // ── SchoolLaunch Import State ──
+  const [importStep, setImportStep] = useState<'upload' | 'parsing' | 'confirm' | 'complete'>('upload')
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [importBudgetLines, setImportBudgetLines] = useState<ImportedBudgetLine[]>([])
+  const [importErrors, setImportErrors] = useState<string[]>([])
+  const [importProfile, setImportProfile] = useState<ImportResult['profile'] | null>(null)
+  const importFileRef = useRef<HTMLInputElement>(null)
 
   // ── Step 1: School Profile ──
   const [name, setName] = useState('')
@@ -149,6 +160,7 @@ export default function GuidedOnboardingPage() {
         setNextBoardMeeting(school.next_board_meeting || '')
         setNextFinanceCommittee(school.next_finance_committee || '')
         setOpeningCashBalance(school.opening_cash_balance ? String(school.opening_cash_balance) : '')
+        setMode('manual') // returning user — skip choice screen
       }
     })()
   }, [router])
@@ -415,7 +427,415 @@ export default function GuidedOnboardingPage() {
     router.refresh()
   }
 
+  // ── SchoolLaunch Import Handlers ──
+
+  const handleImportFiles = async (files: FileList) => {
+    setImportErrors([])
+    setImportStep('parsing')
+
+    let profileJson: SchoolLaunchProfile | null = null
+    let budgetCsvText: string | null = null
+    const warnings: string[] = []
+
+    for (const file of Array.from(files)) {
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      if (ext === 'json') {
+        try {
+          const text = await file.text()
+          profileJson = JSON.parse(text) as SchoolLaunchProfile
+        } catch {
+          warnings.push(`Failed to parse ${file.name} as JSON.`)
+        }
+      } else if (ext === 'csv') {
+        budgetCsvText = await file.text()
+      } else if (ext === 'zip') {
+        try {
+          const JSZip = (await import('jszip')).default
+          const zip = await JSZip.loadAsync(file)
+          for (const [name, entry] of Object.entries(zip.files)) {
+            if (name.endsWith('.json') && !profileJson) {
+              const text = await entry.async('text')
+              profileJson = JSON.parse(text) as SchoolLaunchProfile
+            } else if (name.endsWith('.csv') && !budgetCsvText) {
+              budgetCsvText = await entry.async('text')
+            }
+          }
+        } catch {
+          warnings.push(`Failed to extract ${file.name}. Make sure it's a valid zip file.`)
+        }
+      }
+      // Ignore PDFs and other files silently
+    }
+
+    if (!profileJson) {
+      setImportErrors(['No school profile JSON found. Please upload a JSON file from SchoolLaunch.'])
+      setImportStep('upload')
+      return
+    }
+
+    try {
+      const result = parseSchoolLaunchProfile(profileJson)
+      if (budgetCsvText) {
+        const { lines, warnings: csvWarnings } = parseBudgetCSV(budgetCsvText)
+        result.budgetLines = [...result.budgetLines, ...lines]
+        result.warnings.push(...csvWarnings)
+      }
+      result.warnings.push(...warnings)
+      setImportResult(result)
+      setImportProfile({ ...result.profile })
+      setImportBudgetLines([...result.budgetLines])
+      setImportStep('confirm')
+    } catch (err) {
+      setImportErrors([`Import parsing failed: ${err instanceof Error ? err.message : 'Unknown error'}. You can fall back to manual setup.`])
+      setImportStep('upload')
+    }
+  }
+
+  const finishImport = async () => {
+    if (!importProfile || !importResult) return
+    setSaving(true)
+    setError(null)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError('Session expired.'); setSaving(false); return }
+
+      const mergedAssumptions = mergeAssumptions(importResult.assumptions)
+
+      // Create school record
+      const payload = {
+        user_id: user.id,
+        name: importProfile.name,
+        authorizer: importProfile.authorizer,
+        grades_current_first: importProfile.gradesCurrentFirst,
+        grades_current_last: importProfile.gradesCurrentLast,
+        grades_buildout_first: importProfile.gradesBuildoutFirst,
+        grades_buildout_last: importProfile.gradesBuildoutLast,
+        current_ftes: importProfile.currentFTES,
+        prior_year_ftes: importProfile.priorYearFTES,
+        headcount: importProfile.headcount,
+        operating_year: importProfile.operatingYear,
+        opening_cash_balance: importProfile.openingCashBalance,
+        sped_pct: importProfile.spedPct,
+        frl_pct: importProfile.frlPct,
+        ell_pct: importProfile.ellPct,
+        hicap_pct: importProfile.hicapPct,
+        iep_pct: importProfile.iepPct,
+        financial_assumptions: mergedAssumptions,
+        imported_from_schoollaunch: true,
+        schoollaunch_import_date: new Date().toISOString(),
+        onboarding_completed: true,
+      }
+
+      const { data: upserted, error: upsertErr } = await supabase
+        .from('schools')
+        .upsert(payload, { onConflict: 'user_id' })
+        .select('id')
+        .single()
+
+      if (upsertErr) { setError(upsertErr.message); setSaving(false); return }
+
+      const newSchoolId = upserted.id
+
+      // Import budget lines as first financial snapshot
+      if (importBudgetLines.length > 0) {
+        const { useStore } = await import('@/lib/store')
+        useStore.getState().setSchoolContext(user.id, newSchoolId)
+        const mappedCategories = importBudgetLines.map((l) => ({
+          category: l.category,
+          budget: l.budget,
+          ytdActuals: l.ytdActuals,
+          accountType: l.accountType,
+        }))
+        useStore.getState().importFinancialData(
+          mappedCategories,
+          currentMonthKey(),
+          'SchoolLaunch Import',
+          mappedCategories.length,
+        )
+      }
+
+      setImportStep('complete')
+      setSaving(false)
+      router.push('/dashboard')
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed.')
+      setSaving(false)
+    }
+  }
+
   const progressPct = ((currentStep + 1) / STEPS.length) * 100
+
+  // ── Choice Screen ──
+  if (mode === 'choose') {
+    return (
+      <div className="w-full max-w-2xl mx-auto">
+        {/* Branding */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-2.5 mb-2">
+            <div
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-extrabold text-white"
+              style={{ background: 'linear-gradient(135deg, #2ec4b6 0%, #14a3a3 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif', boxShadow: '0 2px 8px rgba(46, 196, 182, 0.3)' }}
+            >S</div>
+            <div className="text-2xl tracking-tight" style={{ color: 'var(--brand-700)', fontFamily: 'var(--font-display), system-ui, sans-serif', fontWeight: 700 }}>
+              School<span style={{ color: 'var(--accent-500)' }}>CFO</span>
+            </div>
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mt-4" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+            Welcome! How would you like to get started?
+          </h1>
+          <p className="text-sm mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
+            Choose the option that matches your situation.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* New School */}
+          <button
+            onClick={() => setMode('manual')}
+            className="text-left p-6 rounded-xl border-2 border-gray-200 hover:border-[#1e3a5f] hover:shadow-md transition-all bg-white group"
+          >
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style={{ background: 'var(--brand-50)' }}>
+              <School size={20} style={{ color: 'var(--brand-600)' }} />
+            </div>
+            <h2 className="text-base font-semibold text-gray-900 mb-1" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+              Set Up a New School
+            </h2>
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+              Enter your school profile, upload your first budget file, and start managing your finances.
+            </p>
+          </button>
+
+          {/* Import from SchoolLaunch */}
+          <button
+            onClick={() => setMode('import')}
+            className="text-left p-6 rounded-xl border-2 border-gray-200 hover:border-[#2ec4b6] hover:shadow-md transition-all bg-white group"
+          >
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style={{ background: 'rgba(46, 196, 182, 0.1)' }}>
+              <Download size={20} style={{ color: '#2ec4b6' }} />
+            </div>
+            <h2 className="text-base font-semibold text-gray-900 mb-1" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+              Import from SchoolLaunch
+            </h2>
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+              Already planned your school in SchoolLaunch? Import your profile, budget, and projections automatically.
+            </p>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── SchoolLaunch Import Flow ──
+  if (mode === 'import') {
+    return (
+      <div className="w-full max-w-2xl mx-auto">
+        {/* Branding */}
+        <div className="text-center mb-6">
+          <div className="flex items-center justify-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-extrabold text-white" style={{ background: 'linear-gradient(135deg, #2ec4b6 0%, #14a3a3 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>S</div>
+            <div className="text-2xl tracking-tight" style={{ color: 'var(--brand-700)', fontFamily: 'var(--font-display), system-ui, sans-serif', fontWeight: 700 }}>
+              School<span style={{ color: 'var(--accent-500)' }}>CFO</span>
+            </div>
+          </div>
+          <h1 className="text-lg font-bold text-gray-900 mt-3" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+            Import from SchoolLaunch
+          </h1>
+        </div>
+
+        <div className="bg-white rounded-xl p-6" style={{ border: '1px solid var(--border-default)', boxShadow: 'var(--shadow-sm)' }}>
+          {importStep === 'upload' && (
+            <div>
+              <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+                Upload your SchoolLaunch export files. You can upload a <strong>zip file</strong> or select individual files:
+              </p>
+              <ul className="text-xs mb-4 space-y-1" style={{ color: 'var(--text-tertiary)' }}>
+                <li>• <strong>Profile JSON</strong> (required) — your school profile and financial assumptions</li>
+                <li>• <strong>Budget CSV</strong> (optional) — projected budget lines</li>
+                <li>• <strong>PDF Summary</strong> (optional) — ignored but accepted for convenience</li>
+              </ul>
+
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".json,.csv,.zip,.pdf"
+                multiple
+                className="hidden"
+                onChange={(e) => { if (e.target.files?.length) handleImportFiles(e.target.files) }}
+              />
+              <button
+                onClick={() => importFileRef.current?.click()}
+                className="w-full py-8 border-2 border-dashed border-gray-300 rounded-lg hover:border-[#2ec4b6] transition-colors text-center"
+              >
+                <UploadCloud size={28} className="mx-auto mb-2" style={{ color: 'var(--text-tertiary)' }} />
+                <p className="text-sm font-medium text-gray-700">Click to select files</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>JSON, CSV, ZIP, or PDF</p>
+              </button>
+
+              {importErrors.length > 0 && (
+                <div className="mt-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                  {importErrors.map((err, i) => (
+                    <p key={i} className="text-xs text-red-700">{err}</p>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={() => { setMode('manual'); setError(null) }}
+                className="mt-4 text-xs font-medium hover:underline"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                ← Switch to manual setup
+              </button>
+            </div>
+          )}
+
+          {importStep === 'parsing' && (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2ec4b6] mx-auto mb-3" />
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Parsing SchoolLaunch data...</p>
+            </div>
+          )}
+
+          {importStep === 'confirm' && importProfile && importResult && (
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle size={18} className="text-green-500" />
+                <h2 className="text-sm font-semibold text-gray-800" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+                  Import Preview
+                </h2>
+              </div>
+
+              {importResult.warnings.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                  {importResult.warnings.map((w, i) => (
+                    <p key={i} className="text-xs text-amber-700">{w}</p>
+                  ))}
+                </div>
+              )}
+
+              {/* School profile summary */}
+              <div className="space-y-3 mb-5">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-gray-400 mb-0.5">School Name</label>
+                    <input
+                      type="text"
+                      value={importProfile.name}
+                      onChange={(e) => setImportProfile({ ...importProfile, name: e.target.value })}
+                      className={inputCls}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 mb-0.5">Grades</label>
+                    <p className="text-sm text-gray-800 py-2">{importProfile.gradesCurrentFirst}–{importProfile.gradesCurrentLast} → {importProfile.gradesBuildoutFirst}–{importProfile.gradesBuildoutLast}</p>
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 mb-0.5">Enrollment (Year 1)</label>
+                    <input
+                      type="number"
+                      value={importProfile.headcount}
+                      onChange={(e) => setImportProfile({ ...importProfile, headcount: Number(e.target.value), currentFTES: Number(e.target.value) })}
+                      className={inputCls}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 mb-0.5">FRL %</label>
+                    <input
+                      type="number"
+                      value={importProfile.frlPct}
+                      onChange={(e) => setImportProfile({ ...importProfile, frlPct: Number(e.target.value) })}
+                      className={inputCls}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Budget lines */}
+              {importBudgetLines.length > 0 && (
+                <div className="mb-5">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Budget Lines ({importBudgetLines.length})
+                  </h3>
+                  <div className="max-h-48 overflow-y-auto border rounded-lg" style={{ borderColor: 'var(--border-default)' }}>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-gray-50 border-b" style={{ borderColor: 'var(--border-default)' }}>
+                          <th className="text-left py-1.5 px-3 font-medium text-gray-500">Category</th>
+                          <th className="text-right py-1.5 px-3 font-medium text-gray-500">Budget</th>
+                          <th className="text-left py-1.5 px-3 font-medium text-gray-500">Type</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importBudgetLines.map((line, i) => (
+                          <tr key={i} className="border-b last:border-0" style={{ borderColor: 'var(--border-subtle)' }}>
+                            <td className="py-1.5 px-3 text-gray-700">{line.category}</td>
+                            <td className="py-1.5 px-3 text-right tabular-nums text-gray-700">${line.budget.toLocaleString()}</td>
+                            <td className="py-1.5 px-3">
+                              <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${line.accountType === 'revenue' ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {line.accountType}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Staffing summary */}
+              {importResult.staffingPlan.length > 0 && (
+                <div className="mb-5">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                    Staffing Plan ({importResult.staffingPlan.length} positions, {importResult.staffingPlan.reduce((s, p) => s + p.fte, 0).toFixed(1)} FTE)
+                  </h3>
+                </div>
+              )}
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+                  <p className="text-xs text-red-700">{error}</p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={finishImport}
+                  disabled={saving || !importProfile.name}
+                  className="flex-1 py-2.5 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
+                >
+                  {saving ? 'Importing...' : 'Confirm & Import'}
+                </button>
+                <button
+                  onClick={() => { setImportStep('upload'); setImportResult(null) }}
+                  className="px-4 py-2.5 text-sm font-medium rounded-lg border"
+                  style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                >
+                  Back
+                </button>
+              </div>
+
+              <button
+                onClick={() => { setMode('manual'); setError(null) }}
+                className="mt-3 text-xs font-medium hover:underline block"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                Switch to manual setup instead
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Manual Setup Flow (existing) ──
 
   return (
     <div className="w-full max-w-2xl mx-auto">

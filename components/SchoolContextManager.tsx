@@ -105,7 +105,7 @@ function GuidedPromptCard({
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">
-                Personnel cost threshold (default 80%)
+                Personnel cost threshold (configured in Financial Assumptions)
               </label>
               <div className="flex items-center gap-2">
                 <input

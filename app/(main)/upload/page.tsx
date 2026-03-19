@@ -304,7 +304,7 @@ export default function UploadPage() {
       {
         name: 'Budget Analyst',
         url: '/api/agents/budget-analyst',
-        body: { schoolId, activeMonth: month, pacePercent, categories: fd.categories, totalBudget: fd.totalBudget, ytdSpending: fd.ytdExpenses },
+        body: { schoolId, activeMonth: month, pacePercent, categories: fd.categories, totalBudget: fd.totalBudget, ytdSpending: fd.ytdExpenses, financialAssumptions: state.financialAssumptions },
       },
       {
         name: 'Cash Sentinel',
@@ -314,6 +314,7 @@ export default function UploadPage() {
           totalBudget: fd.totalBudget, ytdSpending: fd.ytdExpenses,
           snapshotCount: Object.keys(state.monthlySnapshots).length,
           categories: fd.categories.map((c) => ({ name: c.name, budget: c.budget, ytdActuals: c.ytdActuals, accountType: c.accountType })),
+          financialAssumptions: state.financialAssumptions,
         },
       },
       {

@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { fiscalIndexFromKey } from '@/lib/fiscalYear'
 import { CLAUDE_MODEL } from '@/lib/constants'
 import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
+import { type FinancialAssumptions, mergeAssumptions } from '@/lib/financialAssumptions'
 import { createClient } from '@/lib/supabase-server'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -44,7 +45,8 @@ function buildSystemPrompt(
   otherGrants: Array<Record<string, unknown>>,
   activeMonth: string,
   schoolContextEntries: ContextEntry[] = [],
-  agentFindings: AgentFindingRow[] = []
+  agentFindings: AgentFindingRow[] = [],
+  assumptions: FinancialAssumptions = mergeAssumptions(),
 ): string {
   // WA State fiscal year — September 1 start. Update when adding multi-state support.
   const monthsElapsed = fiscalIndexFromKey(activeMonth)
@@ -138,6 +140,14 @@ Revenue Risk Flags — proactively warn the school leader about these:
 - Cash flow gaps in November and May (low OSPI payment months — 5% each vs. 8–12.5% in other months)
 - Revenue budget built on headcount rather than AAFTE (likely overstated)
 
+SCHOOL-CONFIGURED FINANCIAL ASSUMPTIONS (use these thresholds when analyzing — the school leader has reviewed and approved them):
+- Benefits load: ${assumptions.benefits_load_pct}% above base salary | Employer FICA: ${assumptions.fica_rate_pct}%
+- Personnel healthy range: ${assumptions.personnel_healthy_min_pct}–${assumptions.personnel_healthy_max_pct}% of total budget | Concern above ${assumptions.personnel_concern_pct}%
+- Salary step escalator: ${assumptions.salary_escalator_pct}% | COLA: ${assumptions.cola_rate_pct}% | Ops escalator: ${assumptions.operations_escalator_pct}%
+- AAFTE projection: ${assumptions.aafte_pct}% of headcount | Authorizer fee: ${assumptions.authorizer_fee_pct}% of state revenue
+- Cash reserves — Healthy: ≥${assumptions.cash_healthy_days} days | Watch: <${assumptions.cash_watch_days} days | Concern: <${assumptions.cash_concern_days} days | Crisis: <${assumptions.cash_crisis_days} days
+- Interest rate on reserves: ${assumptions.interest_rate_pct}%
+
 CURRENT SCHOOL:
 School: ${sp.name}
 Authorizer: ${sp.authorizer}
@@ -176,9 +186,10 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
     }
 
-    const { messages, schoolProfile, financialData, grants, alerts, otherGrants = [], activeMonth = '2026-03', schoolContextEntries = [], agentFindings = [] } = await req.json()
+    const { messages, schoolProfile, financialData, grants, alerts, otherGrants = [], activeMonth = '2026-03', schoolContextEntries = [], agentFindings = [], financialAssumptions = null } = await req.json()
 
-    const systemPrompt = buildSystemPrompt(schoolProfile, financialData, grants, alerts, otherGrants, activeMonth, schoolContextEntries, agentFindings)
+    const assumptions = mergeAssumptions(financialAssumptions)
+    const systemPrompt = buildSystemPrompt(schoolProfile, financialData, grants, alerts, otherGrants, activeMonth, schoolContextEntries, agentFindings, assumptions)
 
     const stream = client.messages.stream({
       model: CLAUDE_MODEL,

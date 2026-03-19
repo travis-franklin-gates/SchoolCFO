@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { CLAUDE_MODEL } from '@/lib/constants'
 import { createClient } from '@/lib/supabase-server'
 import { OSPI_PCT, DEFAULT_OSPI_PCT, getFiscalMonths, fiscalIndexFromKey } from '@/lib/fiscalYear'
+import { type FinancialAssumptions, mergeAssumptions } from '@/lib/financialAssumptions'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -22,6 +23,7 @@ interface RequestBody {
   ytdSpending: number
   snapshotCount: number
   categories?: CategorySummary[]
+  financialAssumptions?: Partial<FinancialAssumptions>
 }
 
 // Category names known to be front-loaded / annual lump-sum expenses.
@@ -44,6 +46,7 @@ export async function POST(req: NextRequest) {
     const { schoolId, activeMonth, cashOnHand, daysOfReserves, totalBudget, ytdSpending } = body
     const snapshotCount = body.snapshotCount ?? 1
     const categories: CategorySummary[] = body.categories ?? []
+    const assumptions = mergeAssumptions(body.financialAssumptions)
 
     if (!schoolId) {
       return NextResponse.json({ error: 'Missing schoolId' }, { status: 400 })
@@ -139,9 +142,9 @@ UPCOMING OSPI APPORTIONMENT (next 3 months):
 ${upcoming.map((u) => `- ${u.month}: ${u.pct}% of annual state aid${u.isLow ? ' [LOW PAYMENT MONTH]' : ''}`).join('\n')}
 
 THRESHOLDS:
-- Watch: <45 days of reserves
-- Concern: <30 days of reserves
-- Action: <15 days of reserves
+- Watch: <${assumptions.cash_watch_days} days of reserves
+- Concern: <${assumptions.cash_concern_days} days of reserves
+- Action: <${assumptions.cash_crisis_days} days of reserves
 ${severityConstraint}
 Return a JSON array of findings. Each finding must have:
 - findingType: "cash_risk"

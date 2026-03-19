@@ -29,7 +29,7 @@ export function buildSchoolContextBlock(entries: ContextEntry[]): string {
       switch (e.key) {
         case 'staffing_ratio': {
           const explanation = String(v.explanation ?? '')
-          const threshold = Number(v.threshold ?? 80)
+          const threshold = Number(v.threshold ?? 80) // fallback; school-specific default in financialAssumptions.personnel_concern_pct
           return `- Staffing: School intentionally staffs above typical para-to-teacher ratio. ${explanation ? `Reason: ${explanation}. ` : ''}Personnel cost threshold set to ${threshold}% (custom override — do not flag personnel under this level).`
         }
         case 'capital_outlays': {

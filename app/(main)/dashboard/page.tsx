@@ -77,6 +77,7 @@ export default function DashboardPage() {
     schoolContextEntries,
     agentFindings,
     lastAgentRunAt,
+    financialAssumptions,
   } = useStore()
 
   const [briefing, setBriefing] = useState('')
@@ -376,8 +377,8 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-1">
             <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-display), system-ui, sans-serif', letterSpacing: '0.08em' }}>Cash Position</p>
             <div className={`w-3 h-3 rounded-full ${
-              financialData.daysOfReserves >= 60 ? 'bg-green-500' :
-              financialData.daysOfReserves >= 30 ? 'bg-yellow-400' : 'bg-red-500'
+              financialData.daysOfReserves >= financialAssumptions.cash_healthy_days ? 'bg-green-500' :
+              financialData.daysOfReserves >= financialAssumptions.cash_concern_days ? 'bg-yellow-400' : 'bg-red-500'
             }`} />
           </div>
           <p className="text-4xl font-extrabold text-gray-900 tracking-tight" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>{fmt(financialData.cashOnHand)}</p>
@@ -385,15 +386,15 @@ export default function DashboardPage() {
             {financialData.daysOfReserves} days of operating reserves
           </p>
           <span className={`inline-flex items-center gap-1 mt-2.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-            financialData.daysOfReserves >= 60
+            financialData.daysOfReserves >= financialAssumptions.cash_healthy_days
               ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
-              : financialData.daysOfReserves >= 30
+              : financialData.daysOfReserves >= financialAssumptions.cash_concern_days
               ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200'
               : 'bg-red-50 text-red-700 ring-1 ring-red-200'
           }`}>
-            {financialData.daysOfReserves >= 60
-              ? 'Above 60-day threshold'
-              : financialData.daysOfReserves >= 30
+            {financialData.daysOfReserves >= financialAssumptions.cash_healthy_days
+              ? `Above ${financialAssumptions.cash_healthy_days}-day threshold`
+              : financialData.daysOfReserves >= financialAssumptions.cash_concern_days
               ? 'Monitor closely'
               : 'Below minimum threshold'}
           </span>
@@ -496,10 +497,8 @@ export default function DashboardPage() {
         const monthlyRevRate = activeFiscalIdx > 0 ? ytdRevenue / activeFiscalIdx : 0
         const monthlyExpRate = activeFiscalIdx > 0 ? ytdExpenses / activeFiscalIdx : 0
         // Threshold lines use the actual monthly burn rate (consistent with days-of-reserves calc)
-        // concern30 = cash needed for 30 days = monthlyExpRate * (30/30) = 1 month of expenses
-        // watch45 = cash needed for 45 days = monthlyExpRate * (45/30) = 1.5 months of expenses
-        const concern30 = Math.round(monthlyExpRate)
-        const watch45 = Math.round(monthlyExpRate * 1.5)
+        const concernLine = Math.round(monthlyExpRate * (financialAssumptions.cash_concern_days / 30))
+        const watchLine = Math.round(monthlyExpRate * (financialAssumptions.cash_watch_days / 30))
 
         const canProject = snapshotCount >= 3
 
@@ -590,12 +589,12 @@ export default function DashboardPage() {
                 />
                 <Tooltip formatter={(v: unknown) => (v != null ? fmt(Number(v)) : '—')} />
                 {/* Red zone: below 30-day threshold */}
-                <ReferenceArea y1={yMin} y2={concern30} fill="#fee2e2" fillOpacity={0.5} />
+                <ReferenceArea y1={yMin} y2={concernLine} fill="#fee2e2" fillOpacity={0.5} />
                 {/* Yellow zone: 30-45 day threshold */}
-                <ReferenceArea y1={concern30} y2={watch45} fill="#fef9c3" fillOpacity={0.4} />
+                <ReferenceArea y1={concernLine} y2={watchLine} fill="#fef9c3" fillOpacity={0.4} />
                 {/* Threshold lines */}
-                <ReferenceLine y={concern30} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={1} />
-                <ReferenceLine y={watch45} stroke="#eab308" strokeDasharray="4 4" strokeWidth={1} />
+                <ReferenceLine y={concernLine} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={1} />
+                <ReferenceLine y={watchLine} stroke="#eab308" strokeDasharray="4 4" strokeWidth={1} />
                 {goesNegative && <ReferenceLine y={0} stroke="#991b1b" strokeWidth={1.5} />}
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Area type="monotone" dataKey="actual" stroke="#1e3a5f" fill="url(#cashActualGrad)" strokeWidth={2} name="Actual" connectNulls={false} />
@@ -603,8 +602,8 @@ export default function DashboardPage() {
               </AreaChart>
             </ResponsiveContainer>
             <div className="flex items-center gap-4 mt-2 text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-100 ring-1 ring-red-200" /> Below 30 days</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-yellow-100 ring-1 ring-yellow-200" /> 30-45 days</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-100 ring-1 ring-red-200" /> Below {financialAssumptions.cash_concern_days} days</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-yellow-100 ring-1 ring-yellow-200" /> {financialAssumptions.cash_concern_days}-{financialAssumptions.cash_watch_days} days</span>
               <span className="ml-auto">{isFiscalYearComplete ? 'Fiscal year complete — showing actuals only' : canProject ? 'Based on current revenue & expense run rates' : 'Projections available after 3 months of data'}</span>
             </div>
             {/* Cash Sentinel findings — suppress forward-looking warnings when fiscal year is complete */}

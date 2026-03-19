@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, FormEvent } from 'react'
-import { Plus, Trash2, Check, Zap, Pencil, X, Bell } from 'lucide-react'
+import { Plus, Trash2, Check, Zap, Pencil, X, Bell, RotateCcw } from 'lucide-react'
 import { useStore, type OtherGrant, type OtherGrantRestrictions } from '@/lib/store'
+import { type FinancialAssumptions, DEFAULT_FINANCIAL_ASSUMPTIONS } from '@/lib/financialAssumptions'
 import SchoolContextManager from '@/components/SchoolContextManager'
 import GradeSpanSelector from '@/components/GradeSpanSelector'
 
@@ -164,6 +165,142 @@ function OtherGrantFormFields({
         >
           Cancel
         </button>
+      </div>
+    </form>
+  )
+}
+
+// ── Financial Assumptions ─────────────────────────────────────────────────────
+
+type AssumptionKey = keyof FinancialAssumptions
+
+interface FieldDef {
+  key: AssumptionKey
+  label: string
+  unit: string
+  step?: number
+}
+
+const ASSUMPTION_GROUPS: { title: string; fields: FieldDef[] }[] = [
+  {
+    title: 'Personnel',
+    fields: [
+      { key: 'benefits_load_pct', label: 'Benefits load (SEBB)', unit: '%' },
+      { key: 'fica_rate_pct', label: 'Employer FICA rate', unit: '%', step: 0.01 },
+      { key: 'personnel_healthy_min_pct', label: 'Healthy range — minimum', unit: '% of budget' },
+      { key: 'personnel_healthy_max_pct', label: 'Healthy range — maximum', unit: '% of budget' },
+      { key: 'personnel_concern_pct', label: 'Concern threshold', unit: '% of budget' },
+    ],
+  },
+  {
+    title: 'Revenue',
+    fields: [
+      { key: 'salary_escalator_pct', label: 'Annual salary step increase', unit: '%', step: 0.1 },
+      { key: 'cola_rate_pct', label: 'COLA assumption', unit: '%', step: 0.1 },
+      { key: 'aafte_pct', label: 'AAFTE as % of headcount', unit: '%' },
+      { key: 'authorizer_fee_pct', label: 'Authorizer admin fee', unit: '% of state revenue', step: 0.1 },
+    ],
+  },
+  {
+    title: 'Cash Flow',
+    fields: [
+      { key: 'cash_healthy_days', label: 'Healthy reserves', unit: 'days' },
+      { key: 'cash_watch_days', label: 'Watch threshold', unit: 'days' },
+      { key: 'cash_concern_days', label: 'Concern threshold', unit: 'days' },
+      { key: 'cash_crisis_days', label: 'Crisis threshold', unit: 'days' },
+    ],
+  },
+  {
+    title: 'Operations',
+    fields: [
+      { key: 'operations_escalator_pct', label: 'Annual ops cost increase', unit: '%', step: 0.1 },
+      { key: 'interest_rate_pct', label: 'Interest rate on reserves', unit: '%', step: 0.1 },
+    ],
+  },
+]
+
+function FinancialAssumptionsEditor() {
+  const { financialAssumptions, updateFinancialAssumptions } = useStore()
+  const [local, setLocal] = useState<FinancialAssumptions>({ ...financialAssumptions })
+  const [saved, setSaved] = useState(false)
+
+  const handleChange = (key: AssumptionKey, value: string) => {
+    setLocal((prev) => ({ ...prev, [key]: value === '' ? 0 : Number(value) }))
+  }
+
+  const resetField = (key: AssumptionKey) => {
+    setLocal((prev) => ({ ...prev, [key]: DEFAULT_FINANCIAL_ASSUMPTIONS[key] }))
+  }
+
+  const handleSave = (e: FormEvent) => {
+    e.preventDefault()
+    updateFinancialAssumptions(local)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  const isModified = (key: AssumptionKey) => local[key] !== DEFAULT_FINANCIAL_ASSUMPTIONS[key]
+
+  return (
+    <form onSubmit={handleSave} className="card-static p-6">
+      <h2 className="text-base font-semibold text-gray-800 mb-1" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+        Financial Assumptions
+      </h2>
+      <p className="text-xs text-gray-400 mb-5">
+        These thresholds are used by the AI CFO when analyzing your data. Adjust them to match your school&apos;s situation.
+      </p>
+
+      <div className="space-y-6">
+        {ASSUMPTION_GROUPS.map((group) => (
+          <div key={group.title}>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{group.title}</h3>
+            <div className="space-y-2.5">
+              {group.fields.map((field) => (
+                <div key={field.key} className="flex items-center gap-3">
+                  <label className="text-sm text-gray-700 w-52 shrink-0">{field.label}</label>
+                  <div className="relative flex-1 max-w-[140px]">
+                    <input
+                      type="number"
+                      value={local[field.key]}
+                      onChange={(e) => handleChange(field.key, e.target.value)}
+                      step={field.step ?? 1}
+                      min={0}
+                      className={`${inputCls} pr-14 text-right ${isModified(field.key) ? 'ring-1 ring-[#1e3a5f]/20' : ''}`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+                      {field.unit}
+                    </span>
+                  </div>
+                  {isModified(field.key) && (
+                    <button
+                      type="button"
+                      onClick={() => resetField(field.key)}
+                      className="text-gray-300 hover:text-[#1e3a5f] transition-colors p-1"
+                      title={`Reset to default (${DEFAULT_FINANCIAL_ASSUMPTIONS[field.key]})`}
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 mt-5">
+        <button
+          type="submit"
+          className="px-5 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-colors"
+          style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}
+        >
+          Save Assumptions
+        </button>
+        {saved && (
+          <span className="flex items-center gap-1.5 text-sm text-green-600">
+            <Check size={14} /> Saved
+          </span>
+        )}
       </div>
     </form>
   )
@@ -572,6 +709,9 @@ export default function SettingsPage() {
           )}
         </div>
       </form>
+
+      {/* ── Financial Assumptions ── */}
+      <FinancialAssumptionsEditor />
 
       {/* ── Categorical Grants ── */}
       <div className="card-static p-6">

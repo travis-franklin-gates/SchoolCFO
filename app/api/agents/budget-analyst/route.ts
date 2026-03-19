@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { CLAUDE_MODEL } from '@/lib/constants'
 import { createClient } from '@/lib/supabase-server'
 import type { BudgetCategory } from '@/lib/store'
+import { type FinancialAssumptions, mergeAssumptions } from '@/lib/financialAssumptions'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -13,6 +14,7 @@ interface RequestBody {
   categories: BudgetCategory[]
   totalBudget: number
   ytdSpending: number
+  financialAssumptions?: Partial<FinancialAssumptions>
 }
 
 export async function POST(req: NextRequest) {
@@ -23,6 +25,7 @@ export async function POST(req: NextRequest) {
   try {
     const body: RequestBody = await req.json()
     const { schoolId, activeMonth, pacePercent, categories, totalBudget, ytdSpending } = body
+    const assumptions = mergeAssumptions(body.financialAssumptions)
 
     if (!schoolId || !categories?.length) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -61,7 +64,7 @@ Return a JSON array of findings. Each finding must have:
 
 Only include categories where burn rate exceeds pace by >5pp (watch), >10pp (concern), >20pp (action), OR where underspend is >20pp below pace (watch — may indicate coding errors or delayed purchases).
 
-Also flag if personnel % is above 85% of total spending (concern) or above 90% (action).
+Also flag if personnel % is above ${assumptions.personnel_concern_pct + 5}% of total spending (concern) or above ${assumptions.personnel_concern_pct + 10}% (action). Healthy personnel range: ${assumptions.personnel_healthy_min_pct}–${assumptions.personnel_healthy_max_pct}% of total budget.
 
 IMPORTANT CAVEATS for any staffing or FTE-related recommendations:
 - If suggesting a 0.49 FTE strategy to avoid SEBB benefits eligibility, always include a caveat that this approach should be reviewed with HR or legal counsel before implementing, as rules and thresholds may change.

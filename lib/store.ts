@@ -6,6 +6,7 @@ import {
   fiscalIndexFromKey,
   calculateCashPosition,
 } from './fiscalYear'
+import { type FinancialAssumptions, DEFAULT_FINANCIAL_ASSUMPTIONS, mergeAssumptions } from './financialAssumptions'
 
 export type AlertSeverity = 'info' | 'warning' | 'critical'
 export type GrantStatus = 'on-pace' | 'watch' | 'underspend-risk'
@@ -240,6 +241,7 @@ interface AppState {
   auditAgentsLastRun: string | null
   auditReadinessScore: number | null
   auditReadinessGrade: string | null
+  financialAssumptions: FinancialAssumptions
 
   // ── Actions ──
   setSchoolContext: (userId: string, schoolId: string) => void
@@ -274,6 +276,7 @@ interface AppState {
   setAgentFindings: (findings: AgentFinding[]) => void
   setLastAgentRunAt: (ts: string) => void
   setAuditMeta: (meta: { lastRun: string; score?: number; grade?: string }) => void
+  updateFinancialAssumptions: (assumptions: Partial<FinancialAssumptions>) => void
   clearSession: () => void
 }
 
@@ -524,6 +527,7 @@ export const useStore = create<AppState>((set, get) => ({
   auditAgentsLastRun: null,
   auditReadinessScore: null,
   auditReadinessGrade: null,
+  financialAssumptions: { ...DEFAULT_FINANCIAL_ASSUMPTIONS },
 
   // ── Auth actions ──
 
@@ -569,6 +573,7 @@ export const useStore = create<AppState>((set, get) => ({
         auditAgentsLastRun: school.audit_agents_last_run ?? null,
         auditReadinessScore: school.audit_readiness_score ?? null,
         auditReadinessGrade: school.audit_readiness_grade ?? null,
+        financialAssumptions: mergeAssumptions(school.financial_assumptions as Partial<FinancialAssumptions> | null),
       })
     }
 
@@ -901,6 +906,21 @@ export const useStore = create<AppState>((set, get) => ({
           })
           .eq('id', schoolId)
         if (error) console.error('[store] updateSchoolProfile', error)
+      })
+    }
+  },
+
+  updateFinancialAssumptions: (assumptions) => {
+    const merged = { ...get().financialAssumptions, ...assumptions }
+    set({ financialAssumptions: merged })
+    const { schoolId } = get()
+    if (schoolId) {
+      writeThrough(async (supabase) => {
+        const { error } = await supabase
+          .from('schools')
+          .update({ financial_assumptions: merged })
+          .eq('id', schoolId)
+        if (error) console.error('[store] updateFinancialAssumptions', error)
       })
     }
   },
@@ -1699,5 +1719,6 @@ export const useStore = create<AppState>((set, get) => ({
     auditAgentsLastRun: null,
     auditReadinessScore: null,
     auditReadinessGrade: null,
+    financialAssumptions: { ...DEFAULT_FINANCIAL_ASSUMPTIONS },
   }),
 }))

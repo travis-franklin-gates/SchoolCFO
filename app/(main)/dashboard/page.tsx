@@ -90,6 +90,7 @@ export default function DashboardPage() {
   const [briefingLoading, setBriefingLoading] = useState(false)
   const [briefingError, setBriefingError] = useState(false)
   const [briefingExpanded, setBriefingExpanded] = useState(false)
+  const [briefingAutoExpanded, setBriefingAutoExpanded] = useState(false)
   const [reanalyzing, setReanalyzing] = useState(false)
   const fetchedForRef = useRef<string | null>(null)
 
@@ -169,12 +170,21 @@ export default function DashboardPage() {
       sessionStorage.removeItem(`briefing:${cacheKey}`)
       setBriefing('')
       fetchedForRef.current = null
+      setBriefingExpanded(true)
     } catch (err) {
       console.error('[re-analyze]', err)
     } finally {
       setReanalyzing(false)
     }
   }
+
+  // Auto-expand briefing after new data upload (cache is stale)
+  useEffect(() => {
+    if (cacheIsStale && !briefingAutoExpanded) {
+      setBriefingExpanded(true)
+      setBriefingAutoExpanded(true)
+    }
+  }, [cacheIsStale, briefingAutoExpanded])
 
   useEffect(() => {
     if (Object.keys(monthlySnapshots).length === 0) return
@@ -407,16 +417,47 @@ export default function DashboardPage() {
 
       {/* ── AI Morning Briefing ───────────────────────────────────────────── */}
       <div className="ai-briefing px-6 py-5">
-        <div className="flex items-center gap-2 mb-3">
-          <div
-            className="w-5 h-5 rounded-md flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--accent-500) 100%)' }}
-          >
-            <span className="text-white text-xs font-bold" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>AI</span>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-5 h-5 rounded-md flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--accent-500) 100%)' }}
+            >
+              <span className="text-white text-xs font-bold" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>AI</span>
+            </div>
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--brand-500)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+              CFO Briefing
+            </span>
+            {cacheIsStale && !reanalyzing && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
+                New data available
+              </span>
+            )}
           </div>
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--brand-500)', fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
-            CFO Briefing
-          </span>
+          <div className="flex items-center gap-3">
+            {lastAgentRunAt && (
+              <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+                Last updated: {new Date(lastAgentRunAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </span>
+            )}
+            {(cacheIsStale || hasNeverRun) && (
+              <button
+                onClick={handleReanalyze}
+                disabled={reanalyzing}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-md text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--brand-800) 100%)' }}
+              >
+                {reanalyzing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-2.5 w-2.5 border-b border-white" />
+                    Analyzing...
+                  </>
+                ) : (
+                  'Re-analyze'
+                )}
+              </button>
+            )}
+          </div>
         </div>
         {briefingLoading ? (
           <div className="space-y-2.5">
@@ -426,24 +467,85 @@ export default function DashboardPage() {
           </div>
         ) : briefingError ? (
           <p className="text-sm italic" style={{ color: 'var(--text-tertiary)' }}>
-            AI briefing unavailable — check that your ANTHROPIC_API_KEY is configured. Budget analysis and alerts below reflect the current financial position.
+            AI briefing unavailable — check that your ANTHROPIC_API_KEY is configured.
           </p>
         ) : briefing ? (
           <div>
-            <div className={`text-sm leading-relaxed ${!briefingExpanded ? 'line-clamp-4' : ''}`} style={{ color: 'var(--text-secondary)' }}>
-              {briefingMain}
-              {briefingAction && (
-                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}> → {briefingAction}</span>
-              )}
-            </div>
-            {briefing.length > 280 && (
-              <button
-                onClick={() => setBriefingExpanded(!briefingExpanded)}
-                className="text-xs font-medium mt-2 hover:underline"
-                style={{ color: 'var(--brand-500)' }}
-              >
-                {briefingExpanded ? 'Show less' : 'Read more'}
-              </button>
+            {/* Collapsed: one-line health summary */}
+            {!briefingExpanded ? (
+              <div>
+                <p className="text-sm leading-relaxed line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
+                  {briefingMain}
+                  {briefingAction && (
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}> → {briefingAction}</span>
+                  )}
+                </p>
+                <button
+                  onClick={() => setBriefingExpanded(true)}
+                  className="text-xs font-medium mt-2 hover:underline"
+                  style={{ color: 'var(--brand-500)' }}
+                >
+                  Read full briefing
+                </button>
+              </div>
+            ) : (
+              <div>
+                {/* Expanded: full briefing + agent highlights */}
+                <div className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  {briefingMain}
+                  {briefingAction && (
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}> → {briefingAction}</span>
+                  )}
+                </div>
+
+                {/* Per-agent highlights */}
+                {agentFindings.length > 0 && (() => {
+                  const agentGroups: Record<string, typeof agentFindings> = {}
+                  const displayFindings = isFiscalYearComplete
+                    ? agentFindings.filter((f) => f.agentName !== 'cash_sentinel')
+                    : agentFindings
+                  for (const f of displayFindings) {
+                    if (f.severity === 'info') continue
+                    const label = f.agentName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                    if (!agentGroups[label]) agentGroups[label] = []
+                    agentGroups[label].push(f)
+                  }
+                  const entries = Object.entries(agentGroups)
+                  if (entries.length === 0) return null
+                  return (
+                    <div className="mt-4 pt-3 space-y-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>Agent Highlights</p>
+                      {entries.map(([agent, findings]) => {
+                        const worst = findings.reduce((a, b) => {
+                          const order = { action: 3, concern: 2, watch: 1, info: 0 }
+                          return (order[a.severity] ?? 0) >= (order[b.severity] ?? 0) ? a : b
+                        })
+                        const severityDot = {
+                          action: 'bg-red-500', concern: 'bg-orange-500', watch: 'bg-yellow-500', info: 'bg-blue-500',
+                        }[worst.severity] ?? 'bg-gray-400'
+                        return (
+                          <div key={agent} className="flex items-start gap-2">
+                            <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${severityDot}`} />
+                            <div className="min-w-0">
+                              <span className="text-xs font-medium text-gray-700">{agent}</span>
+                              <span className="text-xs text-gray-400"> · {findings.length} finding{findings.length > 1 ? 's' : ''}</span>
+                              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>{worst.summary}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+
+                <button
+                  onClick={() => setBriefingExpanded(false)}
+                  className="text-xs font-medium mt-3 hover:underline"
+                  style={{ color: 'var(--brand-500)' }}
+                >
+                  Show less
+                </button>
+              </div>
             )}
           </div>
         ) : (

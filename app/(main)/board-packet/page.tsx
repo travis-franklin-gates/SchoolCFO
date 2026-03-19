@@ -784,7 +784,7 @@ export default function BoardPacketPage() {
               </table>
             </div>
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-xs text-amber-800 mb-3">
-              <strong>Note:</strong> November and May receive reduced OSPI apportionment payments (4.17% vs. 8.33% in other months). Schools must maintain adequate reserves to cover these periods.
+              <strong>Note:</strong> November and May receive reduced OSPI apportionment payments (5% each vs. 8–12.5% in other months). Schools must maintain adequate reserves to cover these low-payment periods.
             </div>
             {/* AI Cash Flow Notes */}
             {editingKey === 'cashFlow' ? (

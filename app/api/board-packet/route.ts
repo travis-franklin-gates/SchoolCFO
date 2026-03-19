@@ -6,10 +6,10 @@ import { createClient } from '@/lib/supabase-server'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// WA OSPI 2025-26 actual apportionment schedule
-const OSPI_SCHEDULE = `WA OSPI 2025-26 monthly apportionment (% of annual state aid):
-July 12.5% | August 10% | September 9% | October 8% | November 5% (LOW PAYMENT MONTH)
-December 9% | January 8.5% | February 9% | March 9% | April 9% | May 5% (LOW PAYMENT MONTH) | June 6%`
+// WA OSPI 2025-26 actual apportionment schedule (fiscal year order: Sep–Aug)
+const OSPI_SCHEDULE = `WA OSPI 2025-26 monthly apportionment (% of annual state aid, fiscal year order):
+September 9% | October 8% | November 5% (LOW PAYMENT MONTH) | December 9%
+January 8.5% | February 9% | March 9% | April 9% | May 5% (LOW PAYMENT MONTH) | June 6% | July 12.5% | August 10%`
 
 export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) {

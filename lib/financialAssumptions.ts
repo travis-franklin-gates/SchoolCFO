@@ -16,6 +16,17 @@ export interface FinancialAssumptions {
   aafte_pct: number              // AAFTE as % of headcount for revenue projection
   authorizer_fee_pct: number     // authorizer admin fee as % of state revenue
 
+  // ── Per-Pupil Rates (V8 revenue model) ──
+  regular_ed_per_pupil: number   // State regular ed per-pupil (AAFTE × rate)
+  sped_per_pupil: number         // State SPED per-pupil (AAFTE × SPED% × rate)
+  facilities_per_pupil: number   // State facilities per-pupil (AAFTE × rate)
+  levy_equity_per_pupil: number  // Levy equity per-pupil (currently $0)
+  title_i_per_pupil: number      // Federal Title I (headcount × FRL% × rate, if FRL > 40%)
+  idea_per_pupil: number         // Federal IDEA (headcount × IEP% × rate)
+  lap_per_pupil: number          // State LAP (headcount × FRL% × rate)
+  tbip_per_pupil: number         // State TBIP (headcount × ELL% × rate)
+  hicap_per_pupil: number        // State HiCap (headcount × HiCap% × rate)
+
   // ── Cash Flow ──
   cash_healthy_days: number      // days of reserves considered healthy
   cash_watch_days: number        // watch threshold
@@ -37,6 +48,15 @@ export const DEFAULT_FINANCIAL_ASSUMPTIONS: FinancialAssumptions = {
   operations_escalator_pct: 2.0,
   aafte_pct: 95,
   authorizer_fee_pct: 3.0,
+  regular_ed_per_pupil: 11000,
+  sped_per_pupil: 4500,
+  facilities_per_pupil: 1500,
+  levy_equity_per_pupil: 0,
+  title_i_per_pupil: 880,
+  idea_per_pupil: 2200,
+  lap_per_pupil: 400,
+  tbip_per_pupil: 1800,
+  hicap_per_pupil: 500,
   cash_healthy_days: 60,
   cash_watch_days: 45,
   cash_concern_days: 30,

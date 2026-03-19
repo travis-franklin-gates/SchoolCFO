@@ -3,6 +3,8 @@ import { fiscalIndexFromKey } from '@/lib/fiscalYear'
 import { CLAUDE_MODEL } from '@/lib/constants'
 import { buildSchoolContextBlock, type ContextEntry } from '@/lib/schoolContext'
 import { type FinancialAssumptions, mergeAssumptions } from '@/lib/financialAssumptions'
+import { buildRevenueModel, formatRevenueModelForPrompt } from '@/lib/revenueModel'
+import type { SchoolProfile, BudgetCategory } from '@/lib/store'
 import { createClient } from '@/lib/supabase-server'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -35,6 +37,19 @@ function buildAgentFindingsBlock(findings: AgentFindingRow[]): string {
 
   return `\n\nSPECIALIST AGENT FINDINGS (use these to ground your responses — cite the source agent when relevant):
 ${sections}`
+}
+
+function buildRevenueModelSection(
+  profile: SchoolProfile,
+  assumptions: FinancialAssumptions,
+  categories: Array<{ name: string; ytdActuals: number; budget: number; burnRate: number; alertStatus: string; accountType?: string }>,
+): string {
+  if (!profile.headcount || profile.headcount === 0) return ''
+  const revenueCategories = categories
+    .filter((c) => c.accountType === 'revenue')
+    .map((c) => ({ ...c, projectedYearEnd: 0, accountType: 'revenue' as const }))
+  const lines = buildRevenueModel(profile, assumptions, revenueCategories as BudgetCategory[])
+  return formatRevenueModelForPrompt(lines)
 }
 
 function buildSystemPrompt(
@@ -163,6 +178,8 @@ FINANCIAL SNAPSHOT (${monthsElapsed} of ${totalMonths} months elapsed — ${pace
 
 BUDGET BY CATEGORY:
 ${fd.categories.map((c) => `- ${c.name}: $${c.ytdActuals.toLocaleString()} of $${c.budget.toLocaleString()} (${c.burnRate.toFixed(0)}% burned) [${c.alertStatus.toUpperCase()}]`).join('\n')}
+
+${buildRevenueModelSection(sp as unknown as SchoolProfile, assumptions, fd.categories)}
 
 WA CATEGORICAL GRANT STATUS:
 ${grants.map((g) => {

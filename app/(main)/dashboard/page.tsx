@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   AreaChart,
   Area,
@@ -27,6 +27,7 @@ import {
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
 import { getFiscalMonths, fiscalIndexFromKey, paceFromKey, OSPI_PCT, DEFAULT_OSPI_PCT } from '@/lib/fiscalYear'
+import { buildRevenueModel, type RevenueSource } from '@/lib/revenueModel'
 
 function fmt(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
@@ -683,6 +684,103 @@ export default function DashboardPage() {
           )}
         </div>
       )}
+
+      {/* ── Revenue Model ───────────────────────────────────────────────── */}
+      {schoolProfile.headcount > 0 && (() => {
+        const revenueCategories = financialData.categories.filter((c) => c.accountType === 'revenue')
+        const revenueLines = buildRevenueModel(schoolProfile, financialAssumptions, revenueCategories)
+        const totalExpected = revenueLines.reduce((s, l) => s + l.expected, 0)
+        const totalActual = revenueLines.reduce((s, l) => s + l.actual, 0)
+        const totalDelta = totalActual - totalExpected
+
+        const sourceLabels: Record<RevenueSource, string> = {
+          state: 'State & Local',
+          federal: 'Federal',
+          categorical: 'State Categorical',
+          other: 'Other',
+        }
+        const sources: RevenueSource[] = ['state', 'federal', 'categorical', 'other']
+
+        return (
+          <div className="card-static p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-base font-semibold text-gray-800" style={{ fontFamily: 'var(--font-display), system-ui, sans-serif' }}>
+                  Revenue Model
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                  V8 Commission-aligned · {schoolProfile.headcount} headcount · {Math.round(schoolProfile.headcount * financialAssumptions.aafte_pct / 100)} AAFTE
+                </p>
+              </div>
+              <Link href="/settings" className="text-xs text-[#1e3a5f] hover:underline">Edit assumptions →</Link>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-xs text-gray-500">
+                    <th className="text-left py-2 font-medium">Revenue Line</th>
+                    <th className="text-right py-2 font-medium">Expected</th>
+                    <th className="text-right py-2 font-medium">Actual YTD</th>
+                    <th className="text-right py-2 font-medium">Delta</th>
+                    <th className="text-left py-2 pl-4 font-medium">Formula</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sources.map((source) => {
+                    const group = revenueLines.filter((l) => l.source === source)
+                    if (group.every((l) => l.expected === 0 && l.actual === 0)) return null
+                    return (
+                      <React.Fragment key={source}>
+                        <tr>
+                          <td colSpan={5} className="pt-3 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            {sourceLabels[source]}
+                          </td>
+                        </tr>
+                        {group.map((line) => {
+                          const deltaColor = line.delta > 0 ? 'text-green-600' : line.delta < 0 ? 'text-red-600' : 'text-gray-400'
+                          return (
+                            <tr key={line.key} className="border-b border-gray-50 hover:bg-gray-50/50">
+                              <td className="py-1.5 text-gray-800">{line.label}</td>
+                              <td className="py-1.5 text-right text-gray-600 tabular-nums">{line.expected > 0 ? `$${line.expected.toLocaleString()}` : '—'}</td>
+                              <td className="py-1.5 text-right text-gray-800 tabular-nums font-medium">{line.actual > 0 ? `$${line.actual.toLocaleString()}` : '—'}</td>
+                              <td className={`py-1.5 text-right tabular-nums font-medium ${deltaColor}`}>
+                                {line.expected > 0 || line.actual > 0
+                                  ? `${line.delta >= 0 ? '+' : ''}$${line.delta.toLocaleString()}`
+                                  : '—'}
+                              </td>
+                              <td className="py-1.5 pl-4 text-xs text-gray-400 max-w-[280px] truncate">{line.formula}</td>
+                            </tr>
+                          )
+                        })}
+                      </React.Fragment>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 font-semibold">
+                    <td className="py-2 text-gray-800">Total</td>
+                    <td className="py-2 text-right text-gray-600 tabular-nums">${totalExpected.toLocaleString()}</td>
+                    <td className="py-2 text-right text-gray-800 tabular-nums">${totalActual.toLocaleString()}</td>
+                    <td className={`py-2 text-right tabular-nums ${totalDelta > 0 ? 'text-green-600' : totalDelta < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                      {totalDelta >= 0 ? '+' : ''}${totalDelta.toLocaleString()}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {totalExpected > 0 && totalActual > 0 && Math.abs(totalDelta / totalExpected) > 0.05 && (
+              <div className={`mt-3 px-3 py-2 rounded-lg text-xs ${totalDelta < 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                {totalDelta < 0
+                  ? `Revenue is $${Math.abs(totalDelta).toLocaleString()} (${Math.abs(Math.round(totalDelta / totalExpected * 100))}%) below expected. Check AAFTE actuals against your enrollment assumptions.`
+                  : `Revenue is $${totalDelta.toLocaleString()} (${Math.round(totalDelta / totalExpected * 100)}%) above expected. Verify this isn't a timing difference from the OSPI apportionment schedule.`}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Agent Insights ────────────────────────────────────────────────── */}
       {agentFindings.length > 0 && (() => {

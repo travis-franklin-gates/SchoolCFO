@@ -25,6 +25,13 @@ export interface SchoolProfile {
   nextBoardMeeting: string
   nextFinanceCommittee: string
   openingCashBalance: number
+  // Student demographics for revenue model
+  headcount: number
+  spedPct: number
+  frlPct: number
+  ellPct: number
+  hicapPct: number
+  iepPct: number
 }
 
 /** Format a grade span pair as "K-5" style string */
@@ -499,6 +506,12 @@ export const useStore = create<AppState>((set, get) => ({
     nextBoardMeeting: '2026-03-26',
     nextFinanceCommittee: '2026-03-19',
     openingCashBalance: 338000,
+    headcount: 450,
+    spedPct: 14,
+    frlPct: 52,
+    ellPct: 12,
+    hicapPct: 5,
+    iepPct: 14,
   },
   financialData: {
     totalBudget: 5150000,
@@ -569,6 +582,12 @@ export const useStore = create<AppState>((set, get) => ({
           nextBoardMeeting: school.next_board_meeting || existing.nextBoardMeeting,
           nextFinanceCommittee: school.next_finance_committee || existing.nextFinanceCommittee,
           openingCashBalance: school.opening_cash_balance != null ? Number(school.opening_cash_balance) : existing.openingCashBalance,
+          headcount: Number(school.headcount) || existing.headcount,
+          spedPct: Number(school.sped_pct) || existing.spedPct,
+          frlPct: Number(school.frl_pct) || existing.frlPct,
+          ellPct: Number(school.ell_pct) || existing.ellPct,
+          hicapPct: Number(school.hicap_pct) || existing.hicapPct,
+          iepPct: Number(school.iep_pct) || existing.iepPct,
         },
         auditAgentsLastRun: school.audit_agents_last_run ?? null,
         auditReadinessScore: school.audit_readiness_score ?? null,
@@ -903,6 +922,12 @@ export const useStore = create<AppState>((set, get) => ({
             next_board_meeting: updated.nextBoardMeeting || null,
             next_finance_committee: updated.nextFinanceCommittee || null,
             opening_cash_balance: updated.openingCashBalance ?? 0,
+            headcount: updated.headcount ?? 0,
+            sped_pct: updated.spedPct ?? 0,
+            frl_pct: updated.frlPct ?? 0,
+            ell_pct: updated.ellPct ?? 0,
+            hicap_pct: updated.hicapPct ?? 0,
+            iep_pct: updated.iepPct ?? 0,
           })
           .eq('id', schoolId)
         if (error) console.error('[store] updateSchoolProfile', error)
@@ -1691,6 +1716,12 @@ export const useStore = create<AppState>((set, get) => ({
       nextBoardMeeting: '',
       nextFinanceCommittee: '',
       openingCashBalance: 0,
+      headcount: 0,
+      spedPct: 0,
+      frlPct: 0,
+      ellPct: 0,
+      hicapPct: 0,
+      iepPct: 0,
     },
     financialData: {
       totalBudget: 0,

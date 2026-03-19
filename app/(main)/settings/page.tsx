@@ -202,6 +202,20 @@ const ASSUMPTION_GROUPS: { title: string; fields: FieldDef[] }[] = [
     ],
   },
   {
+    title: 'Per-Pupil Rates',
+    fields: [
+      { key: 'regular_ed_per_pupil', label: 'Regular Ed per pupil', unit: '$' },
+      { key: 'sped_per_pupil', label: 'SPED per pupil', unit: '$' },
+      { key: 'facilities_per_pupil', label: 'Facilities per pupil', unit: '$' },
+      { key: 'levy_equity_per_pupil', label: 'Levy Equity per pupil', unit: '$' },
+      { key: 'title_i_per_pupil', label: 'Title I per pupil', unit: '$' },
+      { key: 'idea_per_pupil', label: 'IDEA per pupil', unit: '$' },
+      { key: 'lap_per_pupil', label: 'LAP per pupil', unit: '$' },
+      { key: 'tbip_per_pupil', label: 'TBIP per pupil', unit: '$' },
+      { key: 'hicap_per_pupil', label: 'HiCap per pupil', unit: '$' },
+    ],
+  },
+  {
     title: 'Cash Flow',
     fields: [
       { key: 'cash_healthy_days', label: 'Healthy reserves', unit: 'days' },
@@ -454,6 +468,12 @@ export default function SettingsPage() {
       currentFTES: Number(profile.currentFTES),
       priorYearFTES: Number(profile.priorYearFTES),
       openingCashBalance: Number(profile.openingCashBalance),
+      headcount: Number(profile.headcount),
+      spedPct: Number(profile.spedPct),
+      frlPct: Number(profile.frlPct),
+      ellPct: Number(profile.ellPct),
+      hicapPct: Number(profile.hicapPct),
+      iepPct: Number(profile.iepPct),
     })
     setProfileSaved(true)
     setTimeout(() => setProfileSaved(false), 2500)
@@ -651,6 +671,35 @@ export default function SettingsPage() {
               className={inputCls}
             />
           </div>
+          {/* ── Enrollment & Demographics ── */}
+          <div className="col-span-2 pt-2 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Enrollment &amp; Demographics</p>
+          </div>
+          <div>
+            <label className={labelCls}>Headcount (enrolled)</label>
+            <input type="number" min="0" value={profile.headcount} onChange={(e) => setProfile({ ...profile, headcount: Number(e.target.value) })} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>SPED %</label>
+            <input type="number" min="0" max="100" step="0.1" value={profile.spedPct} onChange={(e) => setProfile({ ...profile, spedPct: Number(e.target.value) })} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>FRL %</label>
+            <input type="number" min="0" max="100" step="0.1" value={profile.frlPct} onChange={(e) => setProfile({ ...profile, frlPct: Number(e.target.value) })} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>ELL %</label>
+            <input type="number" min="0" max="100" step="0.1" value={profile.ellPct} onChange={(e) => setProfile({ ...profile, ellPct: Number(e.target.value) })} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>HiCap %</label>
+            <input type="number" min="0" max="100" step="0.1" value={profile.hicapPct} onChange={(e) => setProfile({ ...profile, hicapPct: Number(e.target.value) })} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>IEP %</label>
+            <input type="number" min="0" max="100" step="0.1" value={profile.iepPct} onChange={(e) => setProfile({ ...profile, iepPct: Number(e.target.value) })} className={inputCls} />
+          </div>
+
           <div className="col-span-2">
             <label className={labelCls}>Opening Cash Balance (September 1)</label>
             <p className="text-xs text-gray-500 mb-1">Your cash on hand at the start of this fiscal year — used as the starting point for all cash position calculations</p>

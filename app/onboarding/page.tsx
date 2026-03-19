@@ -87,6 +87,7 @@ export default function GuidedOnboardingPage() {
   const [gradesBuildoutLast, setGradesBuildoutLast] = useState('5')
   const [currentFtes, setCurrentFtes] = useState('')
   const [priorYearFtes, setPriorYearFtes] = useState('')
+  const [headcount, setHeadcount] = useState('')
 
   // ── Step 2: Dates & Cash ──
   const [nextBoardMeeting, setNextBoardMeeting] = useState('')
@@ -179,6 +180,7 @@ export default function GuidedOnboardingPage() {
         grades_buildout_last: gradesBuildoutLast,
         current_ftes: parseFloat(currentFtes) || 0,
         prior_year_ftes: parseFloat(priorYearFtes) || 0,
+        headcount: parseInt(headcount) || 0,
       }
 
       const { data: upserted, error: upsertErr } = await supabase
@@ -563,7 +565,21 @@ export default function GuidedOnboardingPage() {
                 inputStyle={inputStyle}
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                    Headcount (enrolled)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={headcount}
+                    onChange={(e) => setHeadcount(e.target.value)}
+                    className={inputCls}
+                    style={inputStyle}
+                    placeholder="e.g. 200"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                     Current FTES
